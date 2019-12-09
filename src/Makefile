@@ -1,10 +1,11 @@
 #
-# Makefile
+# This file is in the Public Domain.
 #
 
 BIN=		rvault
 
 SYSNAME:=	$(shell uname -s)
+SYSARCH:=	$(shell uname -m)
 
 ifeq ($(DEBUG),1)
 DEBUG=		1
@@ -32,34 +33,11 @@ CFLAGS+=	-Wmissing-declarations -Wredundant-decls -Wnested-externs
 CFLAGS+=	-Wshadow -Wcast-qual -Wcast-align -Wwrite-strings
 CFLAGS+=	-Wold-style-definition
 CFLAGS+=	-Wsuggest-attribute=noreturn -Wjump-misses-init
-
-# New GCC 6/7 flags:
-#CFLAGS+=	-Wduplicated-cond -Wmisleading-indentation -Wnull-dereference
-#CFLAGS+=	-Wduplicated-branches -Wrestrict
+CFLAGS+=	-Wduplicated-cond -Wmisleading-indentation -Wnull-dereference
+CFLAGS+=	-Wduplicated-branches -Wrestrict
 
 #
-# Compiler-specific flags.
-#
-ifeq ($(CC),gcc)
-CFLAGS+=	-Wa,--fatal-warnings -Wl,--fatal-warnings
-endif
-ifeq ($(CC),clang)
-CFLAGS+=	-flto
-LDFLAGS+=	-flto
-endif
-
-#
-# Standard vs debug build flags.
-#
-ifdef DEBUG
-CFLAGS+=	-Og -ggdb -fno-omit-frame-pointer -DDEBUG
-CFLAGS+=	-fsanitize=address -fsanitize=undefined
-else
-CFLAGS+=	-DNDEBUG
-endif
-
-#
-# System-specific compiler flags.
+# System-specific or compiler-specific flags.
 #
 
 ifeq ($(SYSNAME),Linux)
@@ -69,15 +47,43 @@ endif
 
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
+endif
+
+ifeq ($(CC),gcc)
+ifeq ($(SYSNAME),Darwin)
+else
+CFLAGS+=	-Wa,--fatal-warnings -Wl,--fatal-warnings
+endif
+CFLAGS+=	-flto
+LDFLAGS+=	-flto
+endif
+ifeq ($(CC),clang)
+# TODO: LTO
+endif
+
+#
+# Standard vs debug build flags.
+#
+ifdef DEBUG
+CFLAGS+=	-Og -ggdb -fno-omit-frame-pointer -DDEBUG
+ifeq ($(SYSARCH),x86_64)
+CFLAGS+=	-fsanitize=address -fsanitize=undefined
+LDFLAGS+=	-fsanitize=address -fsanitize=undefined
+endif
+else
+CFLAGS+=	-DNDEBUG
+endif
+
+#
+# Dependencies: compiler flags and libraries to link.
+#
+
+ifeq ($(SYSNAME),Darwin)
 # FIXME/XXX
 CFLAGS+=	-I/usr/local/include
 CFLAGS+=	-I/usr/local/Cellar/openssl@1.1/1.1.1d/include
 LDFLAGS+=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
 endif
-
-#
-# Linker flags.
-#
 
 CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
@@ -133,7 +139,10 @@ LUA_OBJS+=	lua/crypto_lua.o
 ifeq ($(MAKECMDGOALS),lib)
 CFLAGS+=	-fPIC
 CFLAGS+=	$(shell pkg-config --cflags lua5.3)
+# Override the LDFLAGS
+LDFLAGS=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
 LDFLAGS+=	$(shell pkg-config --cflags --libs lua5.3)
+LDFLAGS+=	-lssl -lcrypto -lscrypt
 endif
 
 #
@@ -149,7 +158,7 @@ all: $(OBJS)
 lib: $(LUA_LIB)
 
 $(LUA_LIB): $(LUA_OBJS)
-	$(CC) $(LDFLAGS) -fPIC -shared -o $@ $^
+	$(CC) -fPIC -shared -o $@ $^ $(LDFLAGS)
 
 install:
 	mkdir -p $(IBINDIR) && install -c $(BIN) $(IBINDIR)
@@ -169,7 +178,7 @@ tests: $(TESTS)
 	@ for T in $(TESTS); do echo ./$$T; ./$$T; done
 
 lua-tests:
-	@ for T in lua/*.lua; do echo ./$$T; lua ./$$T; done
+	@ for T in lua/*.lua; do echo ./$$T; lua5.3 ./$$T; done
 
 #
 # Debugging

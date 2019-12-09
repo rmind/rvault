@@ -1,20 +1,43 @@
-sudo: required
-dist: xenial
-
 language: c
 
 compiler:
   - gcc
   - clang
 
-install:
-  # build essentials
-  - sudo apt-get install -y build-essential fakeroot debhelper
-  - sudo apt-get install -y libtool libtool-bin make
-  # dependencies
-  - sudo apt-get install -y libssl-dev libreadline-dev
-  - sudo apt-get install -y liblua5.3-dev lua5.3
-  # - sudo apt-get install -y libscrypt-kdf-dev
+dist: bionic
+
+matrix:
+  include:
+    - os: linux
+      arch: amd64
+    - os: linux
+      arch: arm64
+    - os: linux
+      arch: ppc64le
+    - os: osx
+      osx_image: xcode11.2
+
+addons:
+  apt:
+    update: true
+    packages:
+    - build-essential
+    - fakeroot
+    - debhelper
+    - libssl-dev
+    - libscrypt-dev
+    - libreadline-dev
+    - libfuse-dev
+    - liblua5.3-dev
+    - lua5.3
+  homebrew:
+    update: true
+    packages:
+    - openssl@1.1
+    - libscrypt
+    - lua
+    casks:
+    - osxfuse
 
 script:
   # Run the unit tests.
