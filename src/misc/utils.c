@@ -19,7 +19,7 @@
 #define	BUF_GROW_SIZE		(1024)
 
 /*
- * write_wrapped_hex: print the binary buffer data in hex blocks.
+ * hex_write_wrapped: print the binary buffer data in hex blocks.
  */
 ssize_t
 hex_write_wrapped(FILE *stream, const void *buf, size_t len)
@@ -56,7 +56,7 @@ hex_write_wrapped(FILE *stream, const void *buf, size_t len)
 }
 
 /*
- * read_arbitrary_hex: consume arbitrary hex text i.e. any characters in
+ * hex_read_arbitrary: consume arbitrary hex text i.e. any characters in
  * the range of 0..F (either lower or upper case).
  */
 void *

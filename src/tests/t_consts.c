@@ -15,13 +15,6 @@
 #include "mock.h"
 #include "utils.h"
 
-#define	TEST_PWD	"test"
-
-static const uint8_t test_kdf_key[] = {
-	0xc9, 0x4b, 0x14, 0x4a, 0x4a, 0x47, 0x38, 0xf3,
-	0xc6, 0xfa, 0x17, 0x1e, 0x41, 0x3f, 0xb4, 0xa0
-};
-
 /*
  * AES 256 + CBC mode: IV is 16 bytes; key is 32 bytes.
  * Chacha20: IV is 16 bytes (96 bit nonce + 32 bit counter); key is 32 bytes.
@@ -53,17 +46,22 @@ static const char *chacha20_expected_val =
     "dc 0a 64 e5 b5 4a 10 50 cc fd b0 da 9c 5a bc 60"
     "75 b8 a8 aa a0 40 ea 6a c9 ec fd bf";
 
+static const uint8_t kdf_expected_val[] = {
+	0x6f, 0xf3, 0x09, 0x21, 0x11, 0xbd, 0xe8, 0x3d,
+	0x95, 0x61, 0xa0, 0x5f, 0xb4, 0x80, 0x06, 0xee
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 
 static void
 test_kdf(void)
 {
-	uint8_t buf[sizeof(test_kdf_key)];
+	uint8_t buf[sizeof(kdf_expected_val)];
 	int ret;
 
-	ret = kdf_passphrase_genkey(TEST_PWD, NULL, 0, buf, sizeof(buf));
+	ret = kdf_passphrase_genkey(TEST_TEXT, NULL, 0, buf, sizeof(buf));
 	assert(ret == 0);
-	assert(memcmp(buf, test_kdf_key, sizeof(buf)) == 0);
+	assert(memcmp(buf, kdf_expected_val, sizeof(buf)) == 0);
 }
 
 static void

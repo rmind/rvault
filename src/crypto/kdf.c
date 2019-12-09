@@ -122,12 +122,16 @@ kdf_create_params(size_t *len)
 	uint64_t n;
 
 	n = kdf_calibrate();
-	kp = calloc(1, sizeof(kdf_params_t));
-	if (kp) {
-		kp->kdf = KDF_SCRYPT;
-		kp->n = htobe64(n);
-		*len = sizeof(kdf_params_t);
+	if ((kp = calloc(1, sizeof(kdf_params_t))) == NULL) {
+		return NULL;
 	}
+	kp->kdf = KDF_SCRYPT;
+	kp->n = htobe64(n);
+	if (crypto_getrandbytes(kp->salt, KDF_SALT_LEN) == -1) {
+		free(kp);
+		return NULL;
+	}
+	*len = sizeof(kdf_params_t);
 	return kp;
 }
 
@@ -145,7 +149,6 @@ kdf_passphrase_genkey(const char *passphrase, const void *kpbuf, size_t kplen,
 {
 	const size_t len = strlen(passphrase);
 	const unsigned char *salt;
-	size_t saltlen;
 	uint64_t n;
 
 	if (kpbuf) {
@@ -159,14 +162,12 @@ kdf_passphrase_genkey(const char *passphrase, const void *kpbuf, size_t kplen,
 		}
 		n = be64toh(kp->n);
 		salt = kp->salt;
-		saltlen = KDF_SALT_LEN;
 	} else {
 		static unsigned char zero_salt[KDF_SALT_LEN]; // zeroed
 		n = SCRYPT_N_DEFAULT;
 		salt = zero_salt;
-		saltlen = 1;
 	}
 
-	return scrypt_kdf((const void *)passphrase, len, salt, saltlen,
+	return scrypt_kdf((const void *)passphrase, len, salt, KDF_SALT_LEN,
 	    n, SCRYPT_r, SCRYPT_p, buf, buflen);
 }
