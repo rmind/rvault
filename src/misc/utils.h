@@ -168,4 +168,11 @@ darwin_clock_gettime(struct timespec *tv)
 #define	clock_gettime(c,t)	darwin_clock_gettime(t)
 #endif
 
+/*
+ * Misc interfaces.
+ */
+
+ssize_t		hex_write_wrapped(FILE *, const void *, size_t);
+void *		hex_read_arbitrary(FILE *, size_t *);
+
 #endif

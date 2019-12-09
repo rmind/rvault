@@ -20,7 +20,7 @@ endif
 # Common C compiler flags.
 #
 CFLAGS+=	-std=gnu11 -O2 -g -Wall -Wextra -Werror
-CFLAGS+=	-I core/ -I fuse/ -I sys/ -I crypto/ -I misc/
+CFLAGS+=	-I core/ -I fuse/ -I sys/ -I crypto/ -I lua/ -I misc/
 
 #
 # Extended warning flags.
@@ -70,6 +70,10 @@ endif
 
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
+# FIXME/XXX
+CFLAGS+=	-I/usr/local/include
+CFLAGS+=	-I/usr/local/Cellar/openssl@1.1/1.1.1d/include
+LDFLAGS+=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
 endif
 
 #
@@ -79,6 +83,7 @@ endif
 CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
 
+# TODO: LDFLAGS+=	-lreadline
 LDFLAGS+=	-lscrypt-kdf
 LDFLAGS+=	-lssl -lcrypto
 
@@ -92,6 +97,7 @@ OBJS+=		core/fileobj.o
 OBJS+=		fuse/rvaultfs.o
 OBJS+=		sys/fs.o
 OBJS+=		sys/mmap.o
+OBJS+=		misc/utils.o
 
 OBJS+=		crypto/common.o
 OBJS+=		crypto/kdf.o
@@ -111,19 +117,44 @@ TEST_OBJS+=	tests/mock.o
 TESTS:=		$(patsubst tests/%.c,%,$(wildcard tests/t_*.c))
 
 #
+# Lua library
+#
+
+LUA_LIB=	crypto.so
+
+LUA_OBJS+=	crypto/common.o
+LUA_OBJS+=	crypto/kdf.o
+LUA_OBJS+=	crypto/openssl.o
+LUA_OBJS+=	sys/fs.o
+LUA_OBJS+=	lua/crypto_lua.o
+
+ifeq ($(MAKECMDGOALS),lib)
+CFLAGS+=	-fPIC
+CFLAGS+=	$(shell pkg-config --cflags lua)
+LDFLAGS+=	$(shell pkg-config --cflags --libs lua)
+endif
+
+#
 # Targets
 #
 
 install:	IBINDIR=	$(DESTDIR)/$(BINDIR)
+install:	LUA_ILIBDIR=	$(DESTDIR)/$(LUA_LIBDIR)/
 
 all: $(OBJS)
 	$(CC) $(CFLAGS) $^ -o $(BIN) $(LDFLAGS)
+
+lib: $(LUA_LIB)
+
+$(LUA_LIB): $(LUA_OBJS)
+	$(CC) $(LDFLAGS) -fPIC -shared -o $@ $^
 
 install:
 	mkdir -p $(IBINDIR) && install -c $(BIN) $(IBINDIR)
 
 clean:
 	rm -f $(BIN) $(OBJS) $(TESTS) $(TEST_OBJS)
+	rm -f $(LUA_LIB) $(LUA_OBJS)
 
 #
 # Tests
@@ -134,6 +165,9 @@ t_%: $(TEST_OBJS)
 
 tests: $(TESTS)
 	@ for T in $(TESTS); do echo ./$$T; ./$$T; done
+
+lua-tests:
+	@ for T in lua/*.lua; do echo ./$$T; lua ./$$T; done
 
 #
 # Debugging
