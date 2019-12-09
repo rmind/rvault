@@ -17,13 +17,12 @@
 static void
 test_basic(rvault_t *vault)
 {
-	const size_t data_len = sizeof(TEST_TEXT);
 	const int fd = get_tmp_file();
 	ssize_t nbytes, file_len;
 	size_t len;
 	void *buf;
 
-	nbytes = storage_write_data(vault, fd, TEST_TEXT, data_len);
+	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
 	assert(nbytes > 0);
 
 	file_len = fs_file_size(fd);
@@ -31,7 +30,7 @@ test_basic(rvault_t *vault)
 
 	buf = storage_read_data(vault, fd, file_len, &len);
 	assert(buf != NULL);
-	assert(len == data_len);
+	assert(len == TEST_TEXT_LEN);
 	buffer_free(buf, len);
 
 	close(fd);
@@ -45,7 +44,7 @@ test_corrupted(rvault_t *vault)
 	size_t len;
 	void *buf;
 
-	nbytes = storage_write_data(vault, fd, TEST_TEXT, sizeof(TEST_TEXT));
+	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
 	file_len = fs_file_size(fd);
 	assert(nbytes > 0 && file_len == nbytes);
 

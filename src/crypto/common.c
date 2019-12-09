@@ -22,6 +22,8 @@
 
 /*
  * crypto_getrandbytes: get random bytes for cryptographic purposes.
+ *
+ * => Returns the number of bytes filled or -1 on failure.
  */
 ssize_t
 crypto_getrandbytes(void *buf, size_t len)

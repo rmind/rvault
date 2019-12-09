@@ -32,12 +32,12 @@ hex_write_wrapped(FILE *stream, const void *buf, size_t len)
 	/*
 	 * Settings:
 	 * - Block of 4 hex characters (2 bytes) and a space.
-	 * - Up to 15 blocks per row, so they fit in 76 columns.
+	 * - Up to 12 blocks per row, so they fit in 76 columns.
 	 */
 	while (len >= 2) {
-		const char endb = (++n % 15 == 0) ? '\n' : ' ';
+		const char endb = (++n % 12 == 0) ? '\n' : ' ';
 
-		ret = fprintf(stream, "%02x%02x%c", b[0], b[1], endb);
+		ret = fprintf(stream, "%02x %02x%c", b[0], b[1], endb);
 		if (ret < 0) {
 			return -1;
 		}

@@ -13,7 +13,7 @@
 #include "utils.h"
 
 #define	BINARY_SAMPLE_TEXT	"hello world"
-#define	BINARY_SAMPLE_HEX	"6865 6c6c 6f20 776f 726c 64"
+#define	BINARY_SAMPLE_HEX	"68 65 6c 6c 6f 20 77 6f 72 6c 64"
 
 static const unsigned char binary_sample[] = {
 	0x68, 0x65, 0x6c, 0x6c, 0x6f, 0x20, 0x77, 0x6f, 0x72, 0x6c, 0x64

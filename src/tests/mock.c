@@ -13,6 +13,7 @@
 #include <assert.h>
 
 #include "rvault.h"
+#include "utils.h"
 #include "mock.h"
 
 int
@@ -82,4 +83,17 @@ cleanup_vault(rvault_t *vault, char *base_path)
 {
 	rvault_close(vault);
 	cleanup_vault_dir(base_path);
+}
+
+void *
+hex_readmem_arbitrary(const char *s, size_t len, size_t *outlen)
+{
+	void *buf = NULL;
+	FILE *fp;
+
+	if ((fp = fmemopen(__UNCONST(s), len, "r")) != NULL) {
+		buf = hex_read_arbitrary(fp, outlen);
+		fclose(fp);
+	}
+	return buf;
 }

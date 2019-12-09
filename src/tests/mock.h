@@ -9,6 +9,7 @@
 #define	_MOCK_H_
 
 #define	TEST_TEXT	"the quick brown fox jumped over the lazy dog"
+#define	TEST_TEXT_LEN	(sizeof(TEST_TEXT) - 1)
 
 int		get_tmp_file(void);
 void		corrupt_byte_at(int, off_t, unsigned char *);
@@ -18,5 +19,7 @@ void		cleanup_vault_dir(char *);
 
 rvault_t *	get_vault(const char *, char **);
 void		cleanup_vault(rvault_t *, char *);
+
+void *		hex_readmem_arbitrary(const char *, size_t, size_t *);
 
 #endif

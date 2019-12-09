@@ -10,10 +10,10 @@
 #include <string.h>
 #include <assert.h>
 
+#include "rvault.h"
 #include "crypto.h"
 #include "utils.h"
-
-#define	TEXT	"the quick brown fox jumped over the lazy dog"
+#include "mock.h"
 
 static void
 test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
@@ -76,8 +76,8 @@ test_sizes(const unsigned *sizes, size_t count, unsigned multi)
 		assert(buf != NULL);
 		crypto_getrandbytes(buf, len);
 
-		test_encdec(AES_256_CBC, buf, len, TEXT);
-		test_encdec(CHACHA20, buf, len, TEXT);
+		test_encdec(AES_256_CBC, buf, len, TEST_TEXT);
+		test_encdec(CHACHA20, buf, len, TEST_TEXT);
 
 		free(buf);
 	}
@@ -102,8 +102,8 @@ main(void)
 	test_encdec(AES_256_CBC, zeros, sizeof(zeros), "meow");
 
 	/* AES 256 + CBC and ChaCha20. */
-	test_encdec(AES_256_CBC, TEXT, sizeof(TEXT), "meow");
-	test_encdec(CHACHA20, TEXT, sizeof(TEXT), "meow");
+	test_encdec(AES_256_CBC, TEST_TEXT, sizeof(TEST_TEXT), "meow");
+	test_encdec(CHACHA20, TEST_TEXT, sizeof(TEST_TEXT), "meow");
 
 	/* Large dataset: from bytes to megabytes and a gigabyte. */
 	test_size_profiles();
