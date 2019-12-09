@@ -84,7 +84,7 @@ CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
 
 # TODO: LDFLAGS+=	-lreadline
-LDFLAGS+=	-lscrypt-kdf
+LDFLAGS+=	-lscrypt
 LDFLAGS+=	-lssl -lcrypto
 
 #

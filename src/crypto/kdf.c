@@ -13,7 +13,12 @@
 #include <limits.h>
 #include <errno.h>
 
+#ifdef LIBSCRYPT_KDF
 #include <scrypt-kdf.h>
+#else
+#include <libscrypt.h>
+#define	scrypt_kdf	libscrypt_scrypt
+#endif
 
 #include "crypto.h"
 #include "sys.h"
@@ -52,8 +57,8 @@ typedef struct {
 #define	SCRYPT_N_BITS		(sizeof(uint64_t) * CHAR_BIT)
 #define SCRYPT_N_MIN_SHIFT	14	// cost parameter: 2^14 as a minimum
 #define SCRYPT_N_DEFAULT	(UINT64_C(1) << SCRYPT_N_MIN_SHIFT);
-#define	SCRYPT_r		8	// block size
-#define	SCRYPT_p		1	// parallelization parameter
+#define	KDF_SCRYPT_r		8	// block size
+#define	KDF_SCRYPT_p		16	// parallelization parameter
 
 static int64_t
 measure_kdf(const uint64_t n)
@@ -65,7 +70,7 @@ measure_kdf(const uint64_t n)
 
 	clock_gettime(CLOCK_MONOTONIC, &tv1);
 	if (scrypt_kdf(passphrase, sizeof(passphrase), salt, sizeof(salt),
-	    n, SCRYPT_r, SCRYPT_p, buf, sizeof(buf)) == -1) {
+	    n, KDF_SCRYPT_r, KDF_SCRYPT_p, buf, sizeof(buf)) == -1) {
 		return -1;
 	}
 	clock_gettime(CLOCK_MONOTONIC, &tv2);
@@ -169,5 +174,5 @@ kdf_passphrase_genkey(const char *passphrase, const void *kpbuf, size_t kplen,
 	}
 
 	return scrypt_kdf((const void *)passphrase, len, salt, KDF_SALT_LEN,
-	    n, SCRYPT_r, SCRYPT_p, buf, buflen);
+	    n, KDF_SCRYPT_r, KDF_SCRYPT_p, buf, buflen);
 }
