@@ -65,7 +65,6 @@ endif
 ifeq ($(SYSNAME),Linux)
 CFLAGS+=	-D_POSIX_C_SOURCE=200809L
 CFLAGS+=	-D_GNU_SOURCE -D_DEFAULT_SOURCE
-LDFLAGS+=	-ljemalloc
 endif
 
 ifeq ($(SYSNAME),Darwin)
@@ -133,8 +132,8 @@ LUA_OBJS+=	lua/crypto_lua.o
 
 ifeq ($(MAKECMDGOALS),lib)
 CFLAGS+=	-fPIC
-CFLAGS+=	$(shell pkg-config --cflags lua)
-LDFLAGS+=	$(shell pkg-config --cflags --libs lua)
+CFLAGS+=	$(shell pkg-config --cflags lua5.3)
+LDFLAGS+=	$(shell pkg-config --cflags --libs lua5.3)
 endif
 
 #

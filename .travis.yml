@@ -1,0 +1,23 @@
+sudo: required
+dist: xenial
+
+language: c
+
+compiler:
+  - gcc
+  - clang
+
+install:
+  # build essentials
+  - sudo apt-get install -y build-essential fakeroot debhelper
+  - sudo apt-get install -y libtool libtool-bin make
+  # dependencies
+  - sudo apt-get install -y libssl-dev libreadline-dev
+  - sudo apt-get install -y liblua5.3-dev lua5.3
+  # - sudo apt-get install -y libscrypt-kdf-dev
+
+script:
+  # Run the unit tests.
+  - (cd src && make clean && make -j4 && make tests)
+  # Run the Lua tests.
+  - (cd src && make clean && make -j4 lib && make lua-tests)
