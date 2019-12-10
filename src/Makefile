@@ -83,9 +83,9 @@ endif
 CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
 
-# TODO: LDFLAGS+=	-lreadline
 LDFLAGS+=	-lscrypt
 LDFLAGS+=	-lssl -lcrypto
+LDFLAGS+=	-lcurl #-lreadline
 
 #
 # source
@@ -94,6 +94,7 @@ OBJS+=		core/rvault.o
 OBJS+=		core/cli.o
 OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
+OBJS+=		core/http_req.o
 OBJS+=		fuse/rvaultfs.o
 OBJS+=		sys/fs.o
 OBJS+=		sys/mmap.o
