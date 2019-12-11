@@ -100,13 +100,21 @@ crypto_set_passphrasekey(crypto_t *cf, const char *passphrase,
 int
 crypto_set_key(crypto_t *cf, const void *key, size_t len)
 {
+	void *nkey;
+
 	if (cf->klen != len) {
 		return -1;
 	}
-	if ((cf->key= malloc(cf->klen)) == NULL) {
+	if ((nkey = malloc(cf->klen)) == NULL) {
 		return -1;
 	}
-	memcpy(cf->key, key, cf->klen);
+	if (cf->key) {
+		/* Allow resetting the key. */
+		crypto_memzero(cf->key, cf->klen);
+		free(cf->key);
+	}
+	memcpy(nkey, key, cf->klen);
+	cf->key = nkey;
 	return 0;
 }
 
