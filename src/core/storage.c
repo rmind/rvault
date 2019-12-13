@@ -25,24 +25,24 @@
 #include "utils.h"
 
 void *
-buffer_alloc(size_t len)
+sbuffer_alloc(size_t len)
 {
 	return safe_mmap(len, -1, MMAP_WRITEABLE);
 }
 
 void *
-buffer_move(void *buf, size_t len, size_t newlen)
+sbuffer_move(void *buf, size_t len, size_t newlen)
 {
 	void *nbuf;
 
-	nbuf = buffer_alloc(newlen);
+	nbuf = sbuffer_alloc(newlen);
 	if (nbuf == NULL) {
 		return NULL;
 	}
 	if (buf) {
 		ASSERT(len > 0);
 		memcpy(nbuf, buf, MIN(len, newlen));
-		buffer_free(buf, len);
+		sbuffer_free(buf, len);
 	} else {
 		ASSERT(len == 0);
 	}
@@ -50,7 +50,7 @@ buffer_move(void *buf, size_t len, size_t newlen)
 }
 
 void
-buffer_free(void *buf, size_t len)
+sbuffer_free(void *buf, size_t len)
 {
 	safe_munmap(buf, len, MMAP_ERASE);
 }
@@ -65,8 +65,7 @@ storage_hmac_compute(rvault_t *vault, const void *buf, size_t len,
 	key = crypto_get_key(vault->crypto, &key_len);
 	ASSERT(key != NULL);
 
-	return hmac_sha3_256(key, key_len, buf, len, hmac,
-	    HMAC_SHA3_256_BUFLEN) == -1 ? -1 : 0;
+	return hmac_sha3_256(key, key_len, buf, len, hmac) == -1 ? -1 : 0;
 }
 
 static int
@@ -196,7 +195,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	/*
 	 * Allocate a buffer and decrypt the data into it.
 	 */
-	if ((buf = buffer_alloc(buf_len)) == NULL) {
+	if ((buf = sbuffer_alloc(buf_len)) == NULL) {
 		app_log(LOG_ERR, "buffer allocation failed");
 		goto out;
 	}
@@ -204,7 +203,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	nbytes = crypto_decrypt(vault->crypto, enc_buf, buf_len, buf, buf_len);
 	if (nbytes == -1) {
 		app_log(LOG_ERR, "decryption failed");
-		buffer_free(buf, buf_len);
+		sbuffer_free(buf, buf_len);
 		buf = NULL;
 		goto out;
 	}
@@ -214,7 +213,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	 */
 	if (storage_hmac_verify(vault, buf, nbytes, hdr) == -1) {
 		app_log(LOG_ERR, "HMAC verification failed");
-		buffer_free(buf, buf_len);
+		sbuffer_free(buf, buf_len);
 		buf = NULL;
 		goto out;
 	}

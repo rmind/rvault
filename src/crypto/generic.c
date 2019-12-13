@@ -64,28 +64,3 @@ crypto_memzero(void *buf, size_t len)
 	(*memset_funcptr)((void *)(uintptr_t)bufv, 0, len);
 #endif
 }
-
-/*
- * crypto_cipher_id: get the cipher type from name.
- */
-crypto_cipher_t
-crypto_cipher_id(const char *cipher)
-{
-	static const struct cipher_str2id_s {
-		const char *	name;
-		crypto_cipher_t	id;
-	} cipher_str2id[] = {
-		{ "aes-256-cbc",	AES_256_CBC		},
-		{ "aes-256-gcm",	AES_256_GCM		},
-		{ "chacha20",		CHACHA20		},
-		{ "chacha20-poly1305",	CHACHA20_POLY1305	},
-		{ NULL,			CIPHER_NONE		},
-	};
-	for (unsigned i = 0; cipher_str2id[i].name != NULL; i++) {
-		if (strcasecmp(cipher, cipher_str2id[i].name) == 0) {
-			return cipher_str2id[i].id;
-		}
-	}
-	return CIPHER_NONE;
-}
-

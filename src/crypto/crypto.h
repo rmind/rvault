@@ -12,16 +12,29 @@
  * WARNING: used in the on-disk format; keep backwards compatibility.
  */
 typedef enum {
-	CIPHER_NONE	= 0,
-	AES_256_CBC,
-	AES_256_GCM,
-	CHACHA20,
-	CHACHA20_POLY1305,
+	CIPHER_NONE		= 0,
+	AES_256_CBC		= 1,
+	AES_256_GCM		= 2,
+	CHACHA20		= 3,
+	CHACHA20_POLY1305	= 4,
 } crypto_cipher_t;
 
+typedef struct crypto crypto_t;
+
 #ifdef __CRYPTO_PRIVATE
+
+#define	CRYPTO_MAX_ENGINES	16
+
+typedef struct crypto_ops {
+	int		(*create)(struct crypto *);
+	void		(*destroy)(struct crypto *);
+	ssize_t		(*encrypt)(const crypto_t *, const void *,
+			    size_t, void *, size_t);
+	ssize_t		(*decrypt)(const crypto_t *, const void *,
+			    size_t, void *, size_t);
+} crypto_ops_t;
+
 struct crypto {
-	/* AES type. */
 	crypto_cipher_t	cipher;
 
 	/* Key, IV and block lengths. */
@@ -33,12 +46,14 @@ struct crypto {
 	void *		key;
 	void *		iv;
 
-	/* Arbitrary implementation-defined context. */
+	/* Arbitrary implementation-defined context and operations. */
 	void *		ctx;
+	const crypto_ops_t *ops;
 };
-#endif
 
-typedef struct crypto crypto_t;
+int		crypto_engine_register(const char *, const crypto_ops_t *);
+
+#endif
 
 /*
  * Randomness and zeroing suitable for cryptographic purposes.
@@ -56,19 +71,23 @@ int		kdf_passphrase_genkey(const char *, const void *, size_t,
 /*
  * Symmetric encryption/decryption API.
  */
+
+const char **	crypto_cipher_list(unsigned *);
 crypto_cipher_t	crypto_cipher_id(const char *);
+
 crypto_t *	crypto_create(crypto_cipher_t);
 void		crypto_destroy(crypto_t *);
-void *		crypto_gen_iv(const crypto_cipher_t, size_t *);
+
+void *		crypto_gen_iv(crypto_t *, size_t *);
+int		crypto_set_iv(crypto_t *, const void *, size_t);
 
 int		crypto_set_passphrasekey(crypto_t *, const char *,
 		    const void *, size_t);
 int		crypto_set_key(crypto_t *, const void *, size_t);
-int		crypto_set_iv(crypto_t *, const void *, size_t);
+const void *	crypto_get_key(const crypto_t *, size_t *);
+ssize_t		crypto_get_keylen(const crypto_t *);
 
 size_t		crypto_get_buflen(const crypto_t *, size_t);
-const void *	crypto_get_key(const crypto_t *, size_t *);
-ssize_t		crypto_get_keylen(const crypto_cipher_t);
 
 ssize_t		crypto_encrypt(const crypto_t *, const void *, size_t,
 		    void *, size_t);
@@ -82,6 +101,6 @@ ssize_t		crypto_decrypt(const crypto_t *, const void *, size_t,
 #define	HMAC_SHA3_256_BUFLEN	32
 
 ssize_t		hmac_sha3_256(const void *, size_t, const void *, size_t,
-		    void *, size_t);
+		    unsigned char [static HMAC_SHA3_256_BUFLEN]);
 
 #endif

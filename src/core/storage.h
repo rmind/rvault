@@ -60,7 +60,7 @@ typedef struct {
  *	| encrypted binary data	|
  *	| [padding]		|
  *	+-----------------------+
- *	| HMAC			|
+ *	| HMAC or TAG		|
  *	+-----------------------+
  */
 
@@ -88,8 +88,8 @@ typedef struct {
 void *	storage_read_data(rvault_t *, int, size_t, size_t *);
 int	storage_write_data(rvault_t *, int, const void *, size_t);
 
-void *	buffer_alloc(size_t);
-void *	buffer_move(void *, size_t, size_t);
-void	buffer_free(void *, size_t);
+void *	sbuffer_alloc(size_t);
+void *	sbuffer_move(void *, size_t, size_t);
+void	sbuffer_free(void *, size_t);
 
 #endif

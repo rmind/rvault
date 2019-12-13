@@ -87,7 +87,7 @@ fileobj_close(fileobj_t *fobj)
 
 	if (fobj->buf) {
 		ASSERT(fobj->len > 0);
-		buffer_free(fobj->buf, fobj->len);
+		sbuffer_free(fobj->buf, fobj->len);
 	}
 	if (fobj->fd > 0) {
 		close(fobj->fd);
@@ -133,7 +133,7 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	if (endoff > fobj->len) {
 		void *nbuf;
 
-		nbuf = buffer_move(fobj->buf, fobj->len, endoff);
+		nbuf = sbuffer_move(fobj->buf, fobj->len, endoff);
 		if (nbuf == 0) {
 			errno = ENOMEM;
 			return -1;
@@ -175,11 +175,11 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	void *buf;
 
 	if (len == 0) {
-		buffer_free(fobj->buf, fobj->len);
+		sbuffer_free(fobj->buf, fobj->len);
 		buf = NULL;
 		goto out;
 	}
-	if ((buf = buffer_move(fobj->buf, fobj->len, len)) == NULL) {
+	if ((buf = sbuffer_move(fobj->buf, fobj->len, len)) == NULL) {
 		return -1;
 	}
 out:

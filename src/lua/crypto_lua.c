@@ -145,7 +145,7 @@ lua_crypto_gen_iv(lua_State *L)
 	size_t len;
 	void *buf;
 
-	buf = crypto_gen_iv(lctx->cipher, &len);
+	buf = crypto_gen_iv(lctx->crypto, &len);
 	if (buf == NULL) {
 		luaL_error(L, "OOM");
 		return 0;
@@ -162,7 +162,7 @@ lua_crypto_gen_key(lua_State *L)
 	size_t len;
 	void *key;
 
-	len = crypto_get_keylen(lctx->cipher);
+	len = crypto_get_keylen(lctx->crypto);
 	if ((key = malloc(len)) == NULL) {
 		luaL_error(L, "OOM");
 		return 0;

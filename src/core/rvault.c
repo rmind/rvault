@@ -88,56 +88,32 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 }
 
 static int
-rvault_hmac_compute(const char *pwd, const rvault_hdr_t *hdr,
+rvault_hmac_compute(crypto_t *crypto, const rvault_hdr_t *hdr,
     uint8_t hmac[static HMAC_SHA3_256_BUFLEN])
 {
-	const void *kp = RVAULT_HDR_TO_KP(hdr);
-	const size_t kp_len = be16toh(hdr->kp_len);
-	crypto_t *crypto;
 	const void *key;
 	size_t key_len;
-	int ret = -1;
 
-	/*
-	 * Just create the crypto object and get they key from it.
-	 * It is easier and it will securely wipe the key for us.
-	 */
-
-	if ((crypto = crypto_create(hdr->cipher)) == NULL) {
-		return -1;
-	}
-	if (crypto_set_passphrasekey(crypto, pwd, kp, kp_len) == -1) {
-		goto err;
-	}
 	key = crypto_get_key(crypto, &key_len);
 	ASSERT(key != NULL);
 
 	if (hmac_sha3_256(key, key_len, (const void *)hdr,
-	    RVAULT_HMAC_DATALEN(hdr), hmac, HMAC_SHA3_256_BUFLEN) == -1) {
-		goto err;
+	    RVAULT_HMAC_DATALEN(hdr), hmac) == -1) {
+		return -1;
 	}
-	ret = 0;
-err:
-	crypto_destroy(crypto);
-	return ret;
+	return 0;
 }
 
 static int
 rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
 {
-	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
-	const void *key, *hmac_f;
-	size_t key_len;
+	const void *hmac_rec = RVAULT_HDR_TO_HMAC(hdr);
+	uint8_t hmac_comp[HMAC_SHA3_256_BUFLEN];
 
-	key = crypto_get_key(crypto, &key_len);
-	ASSERT(key != NULL);
-
-	if (hmac_sha3_256(key, key_len, (const void *)hdr,
-	    RVAULT_HMAC_DATALEN(hdr), hmac, HMAC_SHA3_256_BUFLEN) == -1) {
+	if (rvault_hmac_compute(crypto, hdr, hmac_comp) == -1) {
 		return -1;
 	}
-	hmac_f = RVAULT_HDR_TO_HMAC(hdr);
-	return memcmp(hmac_f, hmac, HMAC_SHA3_256_BUFLEN) ? -1 : 0;
+	return memcmp(hmac_rec, hmac_comp, HMAC_SHA3_256_BUFLEN) ? -1 : 0;
 }
 
 /*
@@ -147,10 +123,11 @@ int
 rvault_init(const char *path, const char *pwd, const char *cipher_str)
 {
 	crypto_cipher_t cipher;
+	crypto_t *crypto = NULL;
 	rvault_hdr_t *hdr = NULL;
 	void *iv = NULL, *kp = NULL;
-	size_t file_len, iv_len, kp_len;
 	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
+	size_t file_len, iv_len, kp_len;
 	int ret = -1, fd;
 
 	/*
@@ -162,10 +139,20 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
 		goto err;
 	}
-	if ((iv = crypto_gen_iv(cipher, &iv_len)) == NULL) {
+	if ((crypto = crypto_create(cipher)) == NULL) {
+		goto err;
+	}
+	if ((iv = crypto_gen_iv(crypto, &iv_len)) == NULL) {
 		goto err;
 	}
 	if ((kp = kdf_create_params(&kp_len)) == NULL) {
+		goto err;
+	}
+
+	/*
+	 * Derive the key: it will be needed for HMAC.
+	 */
+	if (crypto_set_passphrasekey(crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
 
@@ -189,7 +176,7 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	/*
 	 * Compute the HMAC and write it to the file.  Copy it over.
 	 */
-	if (rvault_hmac_compute(pwd, hdr, hmac) != 0) {
+	if (rvault_hmac_compute(crypto, hdr, hmac) != 0) {
 		goto err;
 	}
 	memcpy(RVAULT_HDR_TO_HMAC(hdr), hmac, HMAC_SHA3_256_BUFLEN);
@@ -212,6 +199,9 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	close(fd);
 	ret = 0;
 err:
+	if (crypto) {
+		crypto_destroy(crypto);
+	}
 	/* Note: free() takes NULL. */
 	free(hdr);
 	free(iv);

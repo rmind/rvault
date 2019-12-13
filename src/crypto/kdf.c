@@ -143,9 +143,7 @@ kdf_create_params(size_t *len)
 /*
  * kdf_passphrase_genkey: generate cryptographic key for a passphrase.
  *
- * - Alogrithm: scrypt KDF.
- * - PBKDF2 is dated; perhaps support Argon2 as an alternative.
- *
+ * => Alogrithm: scrypt KDF.
  * => Return 0 on success and -1 on failure.
  */
 int

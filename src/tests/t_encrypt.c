@@ -30,7 +30,7 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 	cf = crypto_create(c);
 	assert(cf != NULL);
 
-	iv = crypto_gen_iv(c, &len);
+	iv = crypto_gen_iv(cf, &len);
 	assert(iv != NULL);
 	crypto_set_iv(cf, iv, len);
 	free(iv);

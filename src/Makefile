@@ -100,7 +100,8 @@ OBJS+=		sys/fs.o
 OBJS+=		sys/mmap.o
 OBJS+=		misc/utils.o
 
-OBJS+=		crypto/common.o
+OBJS+=		crypto/generic.o
+OBJS+=		crypto/crypto.o
 OBJS+=		crypto/kdf.o
 OBJS+=		crypto/openssl.o
 
@@ -123,7 +124,8 @@ TESTS:=		$(patsubst tests/%.c,%,$(wildcard tests/t_*.c))
 
 LUA_LIB=	crypto.so
 
-LUA_OBJS+=	crypto/common.o
+LUA_OBJS+=	crypto/generic.o
+LUA_OBJS+=	crypto/crypto.o
 LUA_OBJS+=	crypto/kdf.o
 LUA_OBJS+=	crypto/openssl.o
 LUA_OBJS+=	sys/fs.o

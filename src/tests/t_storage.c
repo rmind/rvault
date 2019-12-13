@@ -31,7 +31,7 @@ test_basic(rvault_t *vault)
 	buf = storage_read_data(vault, fd, file_len, &len);
 	assert(buf != NULL);
 	assert(len == TEST_TEXT_LEN);
-	buffer_free(buf, len);
+	sbuffer_free(buf, len);
 
 	close(fd);
 }
