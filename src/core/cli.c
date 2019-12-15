@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <err.h>
@@ -28,11 +29,23 @@ typedef enum {
 static void
 usage(void)
 {
-	fprintf(stderr, "usage: " APP_NAME "\n"
-	    "        -b <base_path>\n"
-	    "        [ -c <cipher> ]\n"
-	    "        [ -r <file> | -w <file> ]\n"
-	    "        [ -m <mountpoint>\n"
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " [OPTIONS] COMMAND\n"
+	    "\n"
+	    "Options:\n"
+	    "  -b, --basepath PATH      Base path to the vault\n"
+	    "  -h, --help               Show this help text\n"
+	    "  -l, --log-level LEVEL    Set log level "
+	    "(DEBUG, INFO, WARNING, ERROR, CRITICAL)\n"
+	    "  -v, --version            Print version information and quit\n"
+	    "\n"
+	    "Commands:\n"
+	    "  create      Create and initialize a new vault\n"
+	    "  read        Read a file from the vault\n"
+	    "  mount       Mount the encrypted vault as a file system\n"
+	    "  write       Write a file to the vault\n"
+	    "\n"
+	    "Run '"APP_NAME" <COMMAND> -h' for more information on a command.\n"
 	);
 	exit(EXIT_FAILURE);
 }
@@ -82,6 +95,13 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 int
 main(int argc, char **argv)
 {
+	static struct option options[] = {
+		{ "basepath",	required_argument,	0,	'b'	},
+		{ "help",	no_argument,		0,	'h'	},
+		{ "log-level",	required_argument,	0,	'l'	},
+		{ "version",	no_argument,		0,	'v' 	},
+		{ NULL,		0,			NULL,	0	}
+	};
 	const char *base_path = NULL, *cipher = NULL;
 	const char *mountpoint = NULL, *target = NULL;
 	char *passphrase = NULL;
@@ -90,7 +110,7 @@ main(int argc, char **argv)
 	bool fg = true;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "c:b:fm:r:w:")) != -1) {
+	while ((ch = getopt_long(argc, argv, "b:hl:v", options, NULL)) != -1) {
 		switch (ch) {
 		case 'c':
 			cipher = optarg;
@@ -117,6 +137,11 @@ main(int argc, char **argv)
 			usage();
 		}
 	}
+	argc -= optind;
+	argv += optind;
+
+	printf("MEOW: %d/%s\n", argc, argv[0]);
+	exit(EXIT_SUCCESS);
 
 	if (!base_path) {
 		usage();
