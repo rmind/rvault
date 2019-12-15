@@ -50,7 +50,7 @@ http_api_request(const char *url, http_req_t *req)
 	CURL *curl;
 	CURLcode res;
 	long verify;
-	int ret;
+	int ret = -1;
 
 	if ((curl = curl_easy_init()) == NULL) {
 		return -1;
@@ -72,7 +72,6 @@ http_api_request(const char *url, http_req_t *req)
 	}
 	if (verify != 0) {
 		app_log(LOG_ERR, "http SSL verification failed");
-		ret = -1;
 	} else {
 		ret = 0;
 	}

@@ -58,7 +58,7 @@ typedef struct {
 #define SCRYPT_N_MIN_SHIFT	14	// cost parameter: 2^14 as a minimum
 #define SCRYPT_N_DEFAULT	(UINT64_C(1) << SCRYPT_N_MIN_SHIFT);
 #define	KDF_SCRYPT_r		8	// block size
-#define	KDF_SCRYPT_p		16	// parallelization parameter
+#define	KDF_SCRYPT_p		2	// parallelization parameter
 
 static int64_t
 measure_kdf(const uint64_t n)
