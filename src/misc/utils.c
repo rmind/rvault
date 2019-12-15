@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdarg.h>
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
@@ -114,4 +115,31 @@ hex_read_arbitrary(FILE *stream, size_t *outlen)
 	}
 	*outlen = nbytes;
 	return buf;
+}
+
+/*
+ * Logging facility.
+ */
+
+static int	app_log_level = LOG_WARNING;
+
+void
+app_setlog(int level)
+{
+	app_log_level = level;
+}
+
+void
+app_log(int level, const char *fmt, ...)
+{
+	FILE *fp = (level <= LOG_ERR) ? stderr : stdout;
+	va_list ap;
+
+	if (level > app_log_level) {
+		return;
+	}
+	va_start(ap, fmt);
+	vfprintf(fp, fmt, ap);
+	va_end(ap);
+	fputs("\n", fp);
 }

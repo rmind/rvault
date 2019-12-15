@@ -10,6 +10,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <fcntl.h>
 #include <pwd.h>
 #include <err.h>
@@ -18,24 +19,63 @@
 #include "rvaultfs.h"
 #include "fileobj.h"
 #include "sys.h"
+#include "utils.h"
 
-#define	BUF_SIZE	(64 * 1024)
-
-typedef enum {
-	FILE_READ, FILE_WRITE
-} file_op_t;
+//////////////////////////////////////////////////////////////////////////////
 
 static void
-usage(void)
+create_vault(const char *path, int argc, char **argv)
 {
-	fprintf(stderr, "usage: " APP_NAME "\n"
-	    "        -b <base_path>\n"
-	    "        [ -c <cipher> ]\n"
-	    "        [ -r <file> | -w <file> ]\n"
-	    "        [ -m <mountpoint>\n"
+	if (argc) {
+		const char *cipher = argv[0];
+		char *passphrase = NULL;
+
+		if ((passphrase = getpass("Passphrase: ")) == NULL) {
+			errx(EXIT_FAILURE, "missing passphrase");
+		}
+		if (rvault_init(path, passphrase, cipher) == -1) {
+			err(EXIT_FAILURE, "failed to initialize metadata");
+		}
+		crypto_memzero(passphrase, strlen(passphrase));
+		free(passphrase);
+		return;
+	}
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " create CIPHER\n"
+	    "\n"
+	    "Create a new vault\n"
+	    "\n"
 	);
 	exit(EXIT_FAILURE);
 }
+
+static void
+mount_vault(rvault_t *vault, int argc, char **argv)
+{
+	if (argc) {
+		const char *mountpoint = argv[0];
+#if 0
+		if (!fg && daemon(0, 0) == -1) {
+			err(EXIT_FAILURE, "daemon");
+		}
+#endif
+		rvaultfs_run(vault, mountpoint);
+		return;
+	}
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " mount PATH\n"
+	    "\n"
+	    "Mount the vault at the given path\n"
+	    "\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+#define	BUF_SIZE	(64 * 1024)
+
+typedef enum { FILE_READ, FILE_WRITE } file_op_t;
 
 static void
 do_file_io(rvault_t *vault, const char *target, file_op_t io)
@@ -79,76 +119,221 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 	free(buf);
 }
 
+static void
+file_read_cmd(rvault_t *vault, int argc, char **argv)
+{
+	if (argc) {
+		const char *target = argv[0];
+		do_file_io(vault, target, FILE_READ);
+		return;
+	}
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " read PATH\n"
+	    "\n"
+	    "Read and decrypt the file in the vault.\n"
+	    "The path must represent the namespace of encrypted vault.\n"
+	    "\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+static void
+file_write_cmd(rvault_t *vault, int argc, char **argv)
+{
+	if (argc) {
+		const char *target = argv[0];
+		do_file_io(vault, target, FILE_WRITE);
+		return;
+	}
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " write PATH\n"
+	    "\n"
+	    "Encrypt and write the file into the vault.\n"
+	    "The path must represent the namespace of encrypted vault.\n"
+	    "\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+static void
+usage(void)
+{
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " [OPTIONS] COMMAND\n"
+	    "\n"
+	    "Options:\n"
+	    "  -d, --datapath PATH      Base path to the vault data\n"
+	    "  -h, --help               Show this help text\n"
+	    "  -l, --log-level LEVEL    Set log level "
+	    "(DEBUG, INFO, WARNING, ERROR, CRITICAL)\n"
+	    "  -s, --server ADDRESS     Authentication server address\n"
+	    "  -v, --version            Print version information and quit\n"
+	    "\n"
+	    "Environment variables:\n"
+	    "  RVAULT_DATAPATH          Base path of the vault data\n"
+	    "  RVAULT_SERVER            Authentication server address\n"
+	    "\n"
+	    "Commands:\n"
+	    "  create           Create and initialize a new vault\n"
+	    "  read             Read a file from the vault\n"
+	    "  mount            Mount the encrypted vault as a file system\n"
+	    "  write            Write a file to the vault\n"
+	    "\n"
+	    "Run '"APP_NAME" <COMMAND> -h' for more information on a command.\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+static void
+usage_datapath(void)
+{
+	fprintf(stderr,
+	    APP_NAME ": please specify the base data path.\n\n"
+	    "  " APP_NAME " -d PATH COMMAND\n"
+	    "    or\n"
+	    "  RVAULT_DATAPATH=PATH " APP_NAME " COMMAND\n"
+	    "\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+typedef void (*cmd_func_t)(rvault_t *, int, char **);
+
+static void
+process_command(const char *datapath, const char *server, int argc, char **argv)
+{
+	static const struct command_s {
+		const char *	name;
+		cmd_func_t	func;
+	} commands[] = {
+		/* "create" -- handled separately to create the vault */
+		{ "read",	file_read_cmd,		},
+		{ "write",	file_write_cmd,		},
+		{ "mount",	mount_vault,		},
+	};
+	char *passphrase = NULL;
+	cmd_func_t cmd_func = NULL;
+	rvault_t *vault;
+	bool create;
+
+	for (unsigned i = 0; i < __arraycount(commands); i++) {
+		if (strcmp(commands[i].name, argv[0]) == 0) {
+			cmd_func = commands[i].func;
+			break;
+		}
+	}
+	create = strcmp("create", argv[0]) == 0;
+	argc -= 1;
+	argv += 1;
+
+	if (create) {
+		create_vault(datapath, argc, argv);
+		exit(EXIT_SUCCESS);
+	}
+	if (!cmd_func) {
+		usage();
+	}
+
+	/*
+	 * Get the passphrase.
+	 */
+	if ((passphrase = getpass("Passphrase: ")) == NULL) {
+		errx(EXIT_FAILURE, "missing passphrase");
+	}
+	(void)server; // TODO
+
+	/*
+	 * Open the vault; erase the passphrase immediately.
+	 */
+	vault = rvault_open(datapath, passphrase);
+	if (vault == NULL) {
+		err(EXIT_FAILURE, "failed to open metadata");
+	}
+	crypto_memzero(passphrase, strlen(passphrase));
+	free(passphrase);
+
+	/*
+	 * Run the operation.  Close the vault.
+	 */
+	cmd_func(vault, argc, argv);
+	rvault_close(vault);
+}
+
+static int
+get_log_level(const char *level_name)
+{
+	static struct log_level_s {
+		const char *	name;
+		int		level;
+	} log_levels[] = {
+		{ "DEBUG",	LOG_DEBUG	},
+		{ "INFO",	LOG_INFO	},
+		{ "WARNING",	LOG_WARNING	},
+		{ "ERROR",	LOG_ERR		},
+		{ "CRITICAL",	LOG_CRIT	},
+	};
+	for (unsigned i = 0; i < __arraycount(log_levels); i++) {
+		if (strcasecmp(log_levels[i].name, level_name) == 0) {
+			return log_levels[i].level;
+		}
+	}
+	usage();
+	return -1;
+}
+
 int
 main(int argc, char **argv)
 {
-	const char *base_path = NULL, *cipher = NULL;
-	const char *mountpoint = NULL, *target = NULL;
-	char *passphrase = NULL;
-	file_op_t io = -1;
-	rvault_t *vault;
-	bool fg = true;
+	static const char *opts_s = "d:hl:s:v?";
+	static struct option opts_l[] = {
+		{ "datapath",	required_argument,	0,	'd'	},
+		{ "help",	no_argument,		0,	'h'	},
+		{ "log-level",	required_argument,	0,	'l'	},
+		{ "server",	required_argument,	0,	's'	},
+		{ "version",	no_argument,		0,	'v' 	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	const char *data_path = getenv("RVAULT_DATAPATH");
+	const char *server = getenv("RVAULT_SERVER");
+	int loglevel = LOG_WARNING;
 	int ch;
 
-	while ((ch = getopt(argc, argv, "c:b:fm:r:w:")) != -1) {
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
-		case 'c':
-			cipher = optarg;
+		case 'd':
+			data_path = optarg;
 			break;
-		case 'b':
-			base_path = optarg;
+		case 'l':
+			loglevel = get_log_level(optarg);
 			break;
-		case 'f':
-			fg = true;
+		case 's':
+			server = optarg;
 			break;
-		case 'm':
-			mountpoint = optarg;
+		case 'v':
+			printf(APP_NAME " version " APP_PROJ_VER ", "
+			    "built on " __DATE__ "\n");
+			exit(EXIT_SUCCESS);
 			break;
-		case 'r':
-			target = optarg;
-			io = FILE_READ;
-			break;
-		case 'w':
-			target = optarg;
-			io = FILE_WRITE;
-			break;
+		case 'h':
 		case '?':
 		default:
 			usage();
 		}
 	}
+	argc -= optind;
+	argv += optind;
 
-	if (!base_path) {
+	if (argc == 0) {
 		usage();
 	}
+	if (!data_path) {
+		usage_datapath();
+	}
 
-	if ((passphrase = getpass("Passphrase: ")) == NULL) {
-		errx(EXIT_FAILURE, "missing passphrase");
-	}
-#if 0
-	if (!fg && daemon(0, 0) == -1) {
-		err(EXIT_FAILURE, "daemon");
-	}
-#else
-	(void)fg;
-#endif
-	if (cipher && rvault_init(base_path, passphrase, cipher) == -1) {
-		err(EXIT_FAILURE, "failed to initialize metadata");
-	}
-	vault = rvault_open(base_path, passphrase);
-	if (vault == NULL) {
-		err(EXIT_FAILURE, "failed to open metadata");
-	}
-	crypto_memzero(passphrase, strlen(passphrase)); // paranoid
-
-	if (target) {
-		do_file_io(vault, target, io);
-	}
-	if (mountpoint) {
-		rvaultfs_run(vault, mountpoint);
-	}
-	rvault_close(vault);
-	free(passphrase);
+	app_setlog(loglevel);
+	process_command(data_path, server, argc, argv);
 
 	return EXIT_SUCCESS;
 }
