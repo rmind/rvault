@@ -28,10 +28,6 @@ test_basic(void)
 
 	vault = rvault_open(base_path, passphrase);
 	assert(vault != NULL);
-
-	/* Check that the passphrase was zeroed. */
-	assert(passphrase[0] == '\0');
-
 	rvault_close(vault);
 
 	cleanup_vault_dir(base_path);

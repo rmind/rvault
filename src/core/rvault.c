@@ -213,7 +213,7 @@ err:
  * rvault_open: open the vault at the given directory.
  */
 rvault_t *
-rvault_open(const char *path, char *pwd)
+rvault_open(const char *path, const char *pwd)
 {
 	rvault_t *vault;
 	rvault_hdr_t *hdr;
@@ -256,7 +256,6 @@ rvault_open(const char *path, char *pwd)
 	if (crypto_set_passphrasekey(vault->crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
-	crypto_memzero(pwd, strlen(pwd)); // paranoid
 
 	/*
 	 * Verify the HMAC.  Note: need the crypto object to obtain the key.

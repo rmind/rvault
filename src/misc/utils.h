@@ -12,6 +12,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <syslog.h>
 #include <assert.h>
 
 /*
@@ -174,5 +175,8 @@ darwin_clock_gettime(struct timespec *tv)
 
 ssize_t		hex_write_wrapped(FILE *, const void *, size_t);
 void *		hex_read_arbitrary(FILE *, size_t *);
+
+void		app_setlog(int);
+void		app_log(int, const char *, ...);
 
 #endif

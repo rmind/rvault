@@ -86,15 +86,12 @@ rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	if (strcmp(path, "/") != 0) {
 		return -ENOENT;
 	}
-	filler(buf, ".", NULL, 0);
-	filler(buf, "..", NULL, 0);
-
 	dirp = opendir(vault->base_path);
 	if (dirp == NULL) {
 		return -errno;
 	}
 	while ((dp = readdir(dirp)) != NULL) {
-		if (dp->d_name[0] == '.') {
+		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
 			continue;
 		}
 		filler(buf, dp->d_name, NULL, 0);

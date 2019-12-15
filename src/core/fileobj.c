@@ -64,6 +64,10 @@ fileobj_dataload(fileobj_t *fobj)
 	if ((flen = fs_file_size(fobj->fd)) == -1) {
 		return -1;
 	}
+	if (flen == 0) {
+		// XXX
+		return 0;
+	}
 
 	/*
 	 * Initial load of the data into the memory.
