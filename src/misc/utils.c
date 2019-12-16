@@ -20,6 +20,28 @@
 #define	BUF_GROW_SIZE		(1024)
 
 /*
+ * hex_write: print the binary buffer.
+ */
+ssize_t
+hex_write(FILE *stream, const void *buf, size_t len)
+{
+	const uint8_t *b = buf;
+	size_t nbytes = 0;
+
+	while (len--) {
+		int ret;
+
+		if ((ret = fprintf(stream, "%02x", *b)) < 0) {
+			return -1;
+		}
+		nbytes += ret;
+		b++;
+	}
+	fflush(stream);
+	return nbytes;
+}
+
+/*
  * hex_write_wrapped: print the binary buffer data in hex blocks.
  */
 ssize_t
@@ -115,6 +137,20 @@ hex_read_arbitrary(FILE *stream, size_t *outlen)
 	}
 	*outlen = nbytes;
 	return buf;
+}
+
+void *
+hex_read_arbitrary_buf(const void *buf, size_t len, size_t *outlen)
+{
+	void *rbuf;
+	FILE *fp;
+
+	if ((fp = fmemopen(__UNCONST(buf), len, "r")) == NULL) {
+		return NULL;
+	}
+	rbuf = hex_read_arbitrary(fp, outlen);
+	fclose(fp);
+	return rbuf;
 }
 
 /*

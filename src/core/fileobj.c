@@ -6,6 +6,7 @@
  */
 
 #include <sys/queue.h>
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -23,6 +24,27 @@
 #include "sys.h"
 #include "utils.h"
 
+/*
+ * In-memory file object (think of a vnode).
+ */
+struct fileobj {
+	rvault_t *	vault;
+	unsigned	flags;
+	int		fd;
+
+	char *		vpath;
+	size_t		pathlen;
+
+	/* In-memory buffer and length. */
+	unsigned char *	buf;
+	size_t		len;
+
+	/* Vault file-list entry. */
+	LIST_ENTRY(fileobj) entry;
+};
+
+#define	FILEOBJ_INMEM	0x01	// data in-memory
+
 static int	fileobj_dataload(fileobj_t *);
 
 fileobj_t *
@@ -33,6 +55,11 @@ fileobj_open(rvault_t *vault, const char *path, int flags)
 	if ((fobj = calloc(1, sizeof(fileobj_t))) == NULL) {
 		return NULL;
 	}
+	fobj->vpath = rvault_resolve_path(vault, path, &fobj->pathlen);
+	if (!fobj->vpath) {
+		free(fobj);
+		return NULL;
+	}
 	fobj->vault = vault;
 	LIST_INSERT_HEAD(&vault->file_list, fobj, entry);
 	vault->file_count++;
@@ -40,7 +67,7 @@ fileobj_open(rvault_t *vault, const char *path, int flags)
 	/*
 	 * Open the data file.
 	 */
-	fobj->fd = open(path, flags, 0600);
+	fobj->fd = open(fobj->vpath, flags, 0600);
 	if (fobj->fd == -1) {
 		fileobj_close(fobj);
 		return NULL;
@@ -49,7 +76,8 @@ fileobj_open(rvault_t *vault, const char *path, int flags)
 		fileobj_close(fobj);
 		return NULL;
 	}
-	app_log(LOG_DEBUG, "%s: %p data size %zu", __func__, fobj, fobj->len);
+	app_log(LOG_DEBUG, "%s: vnode %p, data size %zu, vpath [%s]",
+	    __func__, fobj, fobj->len, fobj->vpath);
 	return fobj;
 }
 
@@ -84,11 +112,18 @@ fileobj_close(fileobj_t *fobj)
 {
 	rvault_t *vault = fobj->vault;
 
+	app_log(LOG_DEBUG, "%s: vnode %p", __func__, fobj);
+
 	/* Remove itself from the file list. */
 	LIST_REMOVE(fobj, entry);
 	ASSERT(vault->file_count > 0);
 	vault->file_count--;
 
+	if (fobj->vpath) {
+		ASSERT(fobj->pathlen > 0);
+		crypto_memzero(fobj->vpath, fobj->pathlen);
+		free(fobj->vpath);
+	}
 	if (fobj->buf) {
 		ASSERT(fobj->len > 0);
 		sbuffer_free(fobj->buf, fobj->len);
@@ -113,7 +148,7 @@ fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 	nbytes = MIN(fobj->len - offset, len);
 	memcpy(buf, &fobj->buf[offset], nbytes);
 
-	app_log(LOG_DEBUG, "%s: file %p, read [%jd:%zu] -> %zd",
+	app_log(LOG_DEBUG, "%s: vnode %p, read [%jd:%zu] -> %zd",
 	    __func__, fobj, (intmax_t)offset, len, nbytes);
 	return (size_t)nbytes;
 }
@@ -160,7 +195,7 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 		return -1;
 	}
 
-	app_log(LOG_DEBUG, "%s: file %p, write [%jd:%zu] -> %zd",
+	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu] -> %zd",
 	    __func__, fobj, (intmax_t)offset, len, nbytes);
 	return (size_t)nbytes;
 }
@@ -169,7 +204,7 @@ size_t
 fileobj_getsize(const fileobj_t *fobj)
 {
 	ASSERT(fobj->buf || fobj->len == 0);
-	app_log(LOG_DEBUG, "%s: file %p, size %zu", __func__, fobj, fobj->len);
+	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
 	return fobj->len;
 }
 
@@ -190,6 +225,16 @@ out:
 	fobj->buf = buf;
 	fobj->len = len;
 
-	app_log(LOG_DEBUG, "%s: file %p, size %zu", __func__, fobj, fobj->len);
+	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
+	return 0;
+}
+
+int
+fileobj_stat(const fileobj_t *fobj, struct stat *st)
+{
+	if (fstat(fobj->fd, st) == -1) {
+		return -1;
+	}
+	st->st_size = fileobj_getsize(fobj);
 	return 0;
 }

@@ -108,5 +108,6 @@ main(void)
 	/* Large dataset: from bytes to megabytes and a gigabyte. */
 	test_size_profiles();
 
+	puts("ok");
 	return 0;
 }

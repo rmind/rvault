@@ -85,5 +85,7 @@ main(void)
 	test_basic_write();
 	test_basic_read();
 	test_basic_read_unaligned();
+
+	puts("ok");
 	return 0;
 }

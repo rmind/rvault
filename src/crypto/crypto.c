@@ -28,7 +28,7 @@ static unsigned			crypto_engines_count = 0;
 /*
  * Available ciphers for symmetric encryption.
  */
-static const struct cipher_str2id_s {
+static const struct {
 	const char *		name;
 	crypto_cipher_t		id;
 } cipher_str2id[] = {

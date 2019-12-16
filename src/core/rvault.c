@@ -261,7 +261,8 @@ rvault_open(const char *path, const char *pwd)
 	 * Verify the HMAC.  Note: need the crypto object to obtain the key.
 	 */
 	if (rvault_hmac_verify(vault->crypto, hdr) != 0) {
-		app_log(LOG_CRIT, "HMAC verification failed");
+		app_log(LOG_INFO, "HMAC verification failed: "
+		    "invalid passphrase?");
 		goto err;
 	}
 	return vault;
