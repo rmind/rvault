@@ -28,17 +28,6 @@ get_vault_ctx(void)
 	return vault;
 }
 
-static char *
-get_vault_path(rvault_t *vault, const char *path)
-{
-	char *fpath = NULL;
-
-	if (asprintf(&fpath, "%s/%s", vault->base_path, path) == -1) {
-		return NULL;
-	}
-	return fpath;
-}
-
 static void *
 rvaultfs_init(struct fuse_conn_info *conn __unused)
 {
@@ -51,26 +40,14 @@ rvaultfs_getattr(const char *path, struct stat *st)
 {
 	rvault_t *vault = get_vault_ctx();
 	fileobj_t *fobj;
-	char *vpath;
 	int ret = 0;
 
 	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-	if ((vpath = get_vault_path(vault, path)) == NULL) {
-		return -ENOMEM;
+	if ((fobj = fileobj_open(vault, path, O_RDONLY)) == NULL) {
+		return -errno;
 	}
-	if (stat(vpath, st) == -1) {
-		ret = -errno;
-		goto out;
-	}
-	/* XXX: optimize */
-	if ((fobj = fileobj_open(vault, vpath, O_RDONLY)) == NULL) {
-		ret = -errno;
-		goto out;
-	}
-	st->st_size = fileobj_getsize(fobj);
+	ret = fileobj_stat(fobj, st);
 	fileobj_close(fobj);
-out:
-	free(vpath);
 	return ret;
 }
 
@@ -79,22 +56,35 @@ rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     off_t offset __unused, struct fuse_file_info *fi __unused)
 {
 	rvault_t *vault = get_vault_ctx();
+	char *vault_path;
 	struct dirent *dp;
 	DIR *dirp;
+	size_t len;
 
 	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-	if (strcmp(path, "/") != 0) {
+
+	if ((vault_path = rvault_resolve_path(vault, path, &len)) == NULL) {
 		return -ENOENT;
 	}
-	dirp = opendir(vault->base_path);
+	dirp = opendir(vault_path);
 	if (dirp == NULL) {
+		free(vault_path);
 		return -errno;
 	}
+	free(vault_path);
+
 	while ((dp = readdir(dirp)) != NULL) {
+		char *name;
+
 		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
 			continue;
 		}
-		filler(buf, dp->d_name, NULL, 0);
+		name = rvault_resolve_vname(vault, dp->d_name, &len);
+		if (name == NULL) {
+			return -errno;
+		}
+		filler(buf, name, NULL, 0);
+		free(name);
 	}
 	closedir(dirp);
 	return 0;
@@ -105,8 +95,6 @@ rvaultfs_truncate(const char *path, off_t size)
 {
 	rvault_t *vault = get_vault_ctx();
 	fileobj_t *fobj;
-	char *vpath;
-	int ret = 0;
 
 	app_log(LOG_DEBUG, "%s: path `%s', size %jd",
 	    __func__, path, (intmax_t)size);
@@ -114,25 +102,16 @@ rvaultfs_truncate(const char *path, off_t size)
 	if (size < 0) {
 		return -EINVAL;
 	}
-	/*
-	 * XXX: optimize
-	 */
-	if ((vpath = get_vault_path(vault, path)) == NULL) {
-		return -ENOMEM;
-	}
-	if ((fobj = fileobj_open(vault, vpath, O_RDONLY)) == NULL) {
-		ret = -errno;
-		goto out;
+	if ((fobj = fileobj_open(vault, path, O_RDONLY)) == NULL) {
+		return -errno;
 	}
 	if (fileobj_setsize(fobj, (size_t)size) == -1) {
-		ret = -errno;
+		const int ret = -errno;
 		fileobj_close(fobj);
-		goto out;
+		return ret;
 	}
 	fileobj_close(fobj);
-out:
-	free(vpath);
-	return ret;
+	return 0;
 }
 
 static int
@@ -140,16 +119,10 @@ rvaultfs_open(const char *path, struct fuse_file_info *fi)
 {
 	rvault_t *vault = get_vault_ctx();
 	fileobj_t *fobj;
-	char *vpath;
-	int ret = 0;
 
 	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-	if ((vpath = get_vault_path(vault, path)) == NULL) {
-		return -ENOMEM;
-	}
-	if ((fobj = fileobj_open(vault, vpath, fi->flags)) == NULL) {
-		ret = -errno;
-		goto out;
+	if ((fobj = fileobj_open(vault, path, fi->flags)) == NULL) {
+		return -errno;
 	}
 
 	/* Associate the file object with the FUSE file handle. */
@@ -157,9 +130,7 @@ rvaultfs_open(const char *path, struct fuse_file_info *fi)
 	    "fuse_file_info::fh is too small to fit a pointer value");
 	fi->fh = (uintptr_t)fobj;
 	app_log(LOG_DEBUG, "%s: `%s' -> %p", __func__, path, fobj);
-out:
-	free(vpath);
-	return ret;
+	return 0;
 }
 
 static int
@@ -169,7 +140,7 @@ rvaultfs_read(const char *path __unused, char *buf, size_t len,
 	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
 	ssize_t ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s', handle %p, len %zu, offset %jd",
+	app_log(LOG_DEBUG, "%s: path `%s', vnode %p, len %zu, offset %jd",
 	    __func__, path, fobj, len, (intmax_t)offset);
 	ASSERT(fobj != NULL);
 
@@ -189,7 +160,7 @@ rvaultfs_write(const char *path __unused, const char *buf, size_t len,
 	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
 	ssize_t ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s', handle %p, len %zu, offset %jd",
+	app_log(LOG_DEBUG, "%s: path `%s', vnode %p, len %zu, offset %jd",
 	    __func__, path, fobj, len, (intmax_t)offset);
 	ASSERT(fobj != NULL);
 
@@ -207,7 +178,7 @@ rvaultfs_release(const char *path __unused, struct fuse_file_info *fi)
 {
 	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
 
-	app_log(LOG_DEBUG, "%s: path `%s', handle %p", __func__, path, fobj);
+	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
 	ASSERT(fobj != NULL);
 	fileobj_close(fobj);
 	return 0;

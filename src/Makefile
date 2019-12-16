@@ -96,6 +96,7 @@ LDFLAGS+=	-lcurl #-lreadline
 # source
 #
 OBJS+=		core/rvault.o
+OBJS+=		core/resolve.o
 OBJS+=		core/cli.o
 OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o

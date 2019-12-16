@@ -13,6 +13,7 @@
 #include <assert.h>
 
 #include "rvault.h"
+#include "utils.h"
 #include "mock.h"
 
 static void
@@ -52,10 +53,72 @@ test_invalid_passphrase(void)
 	free(passphrase);
 }
 
+static void
+test_paths(void)
+{
+	static const struct {
+		const char *		path;
+		const char *		expected;
+	} test_paths[] = {
+		{ "a",			"/a"		},
+		{ "a/..",		"/"		},
+		{ ".",			"/"		},
+		{ "./",			"/"		},
+		{ "/./.",		"/"		},
+		{ "/",			"/"		},
+		{ "///",		"/"		},
+		{ "..",			"/"		},
+		{ "../",		"/"		},
+		{ "/../",		"/"		},
+		{ "../a",		"/a"		},
+		{ "/../a",		"/a"		},
+		{ "/./a/./..",		"/"		},
+
+		{ "/a/b/",		"/a/b"		},
+		{ "/a/b",		"/a/b"		},
+
+		{ "/a/b/c/d/e",		"/a/b/c/d/e"	},
+		{ "/a/./c/d/.",		"/a/c/d"	},
+		{ "/a/.././c/d/",	"/c/d"		},
+
+		{ "/../a/b",		"/a/b"		},
+		{ "/a..a/b.c",		"/a..a/b.c"	},
+		{ "/a..a/../b.c",	"/b.c"		},
+		{ "/x.x/../test.txt",	"/test.txt"	},
+		{ "/./a/..//../../.b.",	"/.b."		},
+		{ "/./a/b//../../c",	"/a/c"		},
+	};
+	const char test_pref_path[] = "/tmp/rvault-test";
+	const size_t test_pref_path_len = sizeof(test_pref_path) - 1;
+	rvault_t vault;
+
+	memset(&vault, 0, sizeof(rvault_t)); // dummy
+	vault.base_path = strdup(test_pref_path);
+
+	for (unsigned i = 0; i < __arraycount(test_paths); i++) {
+		char *path, *p;
+		size_t len;
+
+		path = rvault_resolve_path(&vault, test_paths[i].path, &len);
+		ASSERT(path && strlen(path) == len);
+
+		ASSERT(strncmp(path, test_pref_path, test_pref_path_len) == 0);
+		p = path + test_pref_path_len;
+		ASSERT(strcmp(p, test_paths[i].expected) == 0);
+
+		free(path);
+	}
+	free(vault.base_path);
+}
+
 int
 main(void)
 {
+	app_setlog(LOG_ERR);
 	test_basic();
 	test_invalid_passphrase();
+	test_paths();
+
+	puts("ok");
 	return 0;
 }

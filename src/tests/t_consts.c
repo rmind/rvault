@@ -105,6 +105,7 @@ main(void)
 	test_kdf();
 	test_crypto(AES_256_CBC, test_iv, test_key, aes_expected_val);
 	test_crypto(CHACHA20, test_iv, test_key, chacha20_expected_val);
-	(void)chacha20_expected_val;
+
+	puts("ok");
 	return 0;
 }

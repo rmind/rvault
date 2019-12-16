@@ -5,6 +5,7 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -12,6 +13,7 @@
 #include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
+#include <dirent.h>
 #include <pwd.h>
 #include <err.h>
 
@@ -26,8 +28,8 @@
 static void
 create_vault(const char *path, int argc, char **argv)
 {
-	if (argc) {
-		const char *cipher = argv[0];
+	if (argc > 1) {
+		const char *cipher = argv[1];
 		char *passphrase = NULL;
 
 		if ((passphrase = getpass("Passphrase: ")) == NULL) {
@@ -52,8 +54,8 @@ create_vault(const char *path, int argc, char **argv)
 static void
 mount_vault(rvault_t *vault, int argc, char **argv)
 {
-	if (argc) {
-		const char *mountpoint = argv[0];
+	if (argc > 1) {
+		const char *mountpoint = argv[1];
 #if 0
 		if (!fg && daemon(0, 0) == -1) {
 			err(EXIT_FAILURE, "daemon");
@@ -120,10 +122,70 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 }
 
 static void
+file_list_cmd(rvault_t *vault, int argc, char **argv)
+{
+	static const char *opts_s = "h?";
+	static struct option opts_l[] = {
+		{ "help",	no_argument,		0,	'h'	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	const char *path;
+	char *vault_path;
+	struct dirent *dp;
+	size_t len;
+	DIR *dirp;
+	int ch;
+
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+		switch (ch) {
+		case 'h':
+		case '?':
+		default:
+			fprintf(stderr,
+			    "Usage:\t" APP_NAME " ls [PATH]\n"
+			    "\n"
+			    "List the vault content.\n"
+			    "The path must represent the namespace "
+			    "of encrypted vault.\n"
+			    "\n"
+			);
+			exit(EXIT_FAILURE);
+		}
+	}
+	argc -= optind;
+	argv += optind;
+
+	path = argc ? argv[0] : "/";
+	if ((vault_path = rvault_resolve_path(vault, path, &len)) == NULL) {
+		err(EXIT_FAILURE, "rvault_resolve_path");
+	}
+	dirp = opendir(vault_path);
+	if (dirp == NULL) {
+		err(EXIT_FAILURE, "opendir");
+	}
+	free(vault_path);
+
+	while ((dp = readdir(dirp)) != NULL) {
+		char *name;
+
+		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
+			continue;
+		}
+		name = rvault_resolve_vname(vault, dp->d_name, &len);
+		if (name == NULL) {
+			err(EXIT_FAILURE, "rvault_resolve_vname");
+		}
+		printf("%s\n", name);
+		free(name);
+	}
+	closedir(dirp);
+}
+
+static void
 file_read_cmd(rvault_t *vault, int argc, char **argv)
 {
-	if (argc) {
-		const char *target = argv[0];
+	if (argc > 1) {
+		const char *target = argv[1];
 		do_file_io(vault, target, FILE_READ);
 		return;
 	}
@@ -140,8 +202,8 @@ file_read_cmd(rvault_t *vault, int argc, char **argv)
 static void
 file_write_cmd(rvault_t *vault, int argc, char **argv)
 {
-	if (argc) {
-		const char *target = argv[0];
+	if (argc > 1) {
+		const char *target = argv[1];
 		do_file_io(vault, target, FILE_WRITE);
 		return;
 	}
@@ -177,6 +239,7 @@ usage(void)
 	    "\n"
 	    "Commands:\n"
 	    "  create           Create and initialize a new vault\n"
+	    "  ls               List the vault contents\n"
 	    "  read             Read a file from the vault\n"
 	    "  mount            Mount the encrypted vault as a file system\n"
 	    "  write            Write a file to the vault\n"
@@ -204,11 +267,12 @@ typedef void (*cmd_func_t)(rvault_t *, int, char **);
 static void
 process_command(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const struct command_s {
+	static const struct {
 		const char *	name;
 		cmd_func_t	func;
 	} commands[] = {
 		/* "create" -- handled separately to create the vault */
+		{ "ls",		file_list_cmd,		},
 		{ "read",	file_read_cmd,		},
 		{ "write",	file_write_cmd,		},
 		{ "mount",	mount_vault,		},
@@ -225,9 +289,6 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 		}
 	}
 	create = strcmp("create", argv[0]) == 0;
-	argc -= 1;
-	argv += 1;
-
 	if (create) {
 		create_vault(datapath, argc, argv);
 		exit(EXIT_SUCCESS);
@@ -264,7 +325,7 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 static int
 get_log_level(const char *level_name)
 {
-	static struct log_level_s {
+	static struct {
 		const char *	name;
 		int		level;
 	} log_levels[] = {

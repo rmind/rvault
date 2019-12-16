@@ -52,29 +52,36 @@ http_api_request(const char *url, http_req_t *req)
 	long verify;
 	int ret = -1;
 
+	/*
+	 * Initialize the HTTPS request.
+	 */
 	if ((curl = curl_easy_init()) == NULL) {
 		return -1;
 	}
-	curl_easy_setopt(curl, CURLOPT_URL, url);
-	curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+	if ((res = curl_easy_setopt(curl, CURLOPT_URL, url)) != CURLE_OK) {
+		app_log(LOG_ERR, "http without TLS is not allowed");
+		goto out;
+	}
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 
-	curl_easy_setopt(curl, CURLOPT_FRESH_CONNECT, 1L);
+	curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)req);
 
+	/*
+	 * Perform the HTTPS request.
+	 */
 	if ((res = curl_easy_perform(curl)) != CURLE_OK) {
 		goto out;
 	}
 	res = curl_easy_getinfo(curl, CURLINFO_SSL_VERIFYRESULT, &verify);
-	if (res != CURLE_OK) {
+	if (res != CURLE_OK || verify != 0) {
 		goto out;
 	}
-	if (verify != 0) {
-		app_log(LOG_ERR, "http SSL verification failed");
-	} else {
-		ret = 0;
-	}
+	ret = 0;
 out:
 	if (res != CURLE_OK) {
 		const char *errmsg = curl_easy_strerror(res);

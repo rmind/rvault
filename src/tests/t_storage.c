@@ -68,7 +68,10 @@ run_tests(const char *cipher)
 int
 main(void)
 {
+	app_setlog(LOG_CRIT);
 	run_tests("aes-256-cbc");
 	run_tests("chacha20");
+
+	puts("ok");
 	return 0;
 }

@@ -30,4 +30,7 @@ int		rvault_init(const char *, const char *, const char *);
 rvault_t *	rvault_open(const char *, const char *);
 void		rvault_close(rvault_t *);
 
+char *		rvault_resolve_path(rvault_t *, const char *, size_t *);
+char *		rvault_resolve_vname(rvault_t *, const char *, size_t *);
+
 #endif
