@@ -48,7 +48,7 @@ struct fileobj {
 static int	fileobj_dataload(fileobj_t *);
 
 fileobj_t *
-fileobj_open(rvault_t *vault, const char *path, int flags)
+fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 {
 	fileobj_t *fobj;
 
@@ -67,7 +67,7 @@ fileobj_open(rvault_t *vault, const char *path, int flags)
 	/*
 	 * Open the data file.
 	 */
-	fobj->fd = open(fobj->vpath, flags, 0600);
+	fobj->fd = open(fobj->vpath, flags, mode);
 	if (fobj->fd == -1) {
 		fileobj_close(fobj);
 		return NULL;
@@ -105,6 +105,80 @@ fileobj_dataload(fileobj_t *fobj)
 	ASSERT(fobj->buf || fobj->len == 0);
 	fobj->flags |= FILEOBJ_INMEM;
 	return 0;
+}
+
+static int
+fileobj_datasync(fileobj_t *fobj)
+{
+	rvault_t *vault = fobj->vault;
+
+	/*
+	 * If truncating, then just wipe the whole file.
+	 */
+	if (!fobj->buf) {
+		ASSERT(fobj->len == 0);
+		return ftruncate(fobj->fd, 0);
+	}
+
+	/*
+	 * Sync back the encrypted store.
+	 */
+	if (storage_write_data(vault, fobj->fd, fobj->buf, fobj->len) == -1) {
+		errno = EIO; // XXX
+		return -1;
+	}
+	return 0;
+}
+
+int
+fileobj_stat(rvault_t *vault, const char *path, struct stat *st)
+{
+	int fd, ret = -1;
+	char *vpath;
+
+	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+		return -1;
+	}
+	if ((fd = open(vpath, O_RDONLY)) == -1) {
+		app_log(LOG_DEBUG, "%s: open `%s' failed", __func__, vpath);
+		free(vpath);
+		return -1;
+	}
+	free(vpath);
+
+	if (fstat(fd, st) == -1) {
+		app_log(LOG_DEBUG, "%s: fstat `%s' failed", __func__, vpath);
+		goto err;
+	}
+
+	/*
+	 * We support only directories and regular files.
+	 */
+	if (((st->st_mode & S_IFMT) & ~(S_IFDIR | S_IFREG)) != 0) {
+		errno = ENOENT;
+		goto err;
+	}
+
+	/*
+	 * Regular and non-empty files are encrypted.
+	 */
+	if ((st->st_mode & S_IFMT) == S_IFREG && st->st_size > 0) {
+		unsigned char buf[FILEOBJ_HDR_LEN];
+		fileobj_hdr_t *hdr = (void *)buf;
+
+		if (fs_read(fd, hdr, FILEOBJ_HDR_LEN) != FILEOBJ_HDR_LEN) {
+			app_log(LOG_ERR, "%s: `%s' malformed", __func__, vpath);
+			errno = EIO;
+			goto err;
+		}
+		st->st_size = FILEOBJ_EDATA_LEN(hdr);
+	}
+	app_log(LOG_DEBUG, "%s: path `%s', size %zu",
+	    __func__, path, st->st_size);
+	ret = 0;
+err:
+	close(fd);
+	return ret;
 }
 
 void
@@ -186,11 +260,8 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	nbytes = fobj->len - offset;
 	memcpy(&fobj->buf[offset], buf, nbytes);
 
-	/*
-	 * Sync back the encrypted object.
-	 */
-	if (storage_write_data(fobj->vault, fobj->fd,
-	    fobj->buf, fobj->len) == -1) {
+	/* Sync to the backing store. */
+	if (fileobj_datasync(fobj) == -1) {
 		errno = EIO; // XXX
 		return -1;
 	}
@@ -213,28 +284,20 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 {
 	void *buf;
 
-	if (len == 0) {
-		sbuffer_free(fobj->buf, fobj->len);
-		buf = NULL;
-		goto out;
-	}
+	/*
+	 * Note: if new length is zero, then sbuffer_move() will free the
+	 * old buffer and will return NULL.
+	 */
 	if ((buf = sbuffer_move(fobj->buf, fobj->len, len)) == NULL) {
 		return -1;
 	}
-out:
 	fobj->buf = buf;
 	fobj->len = len;
 
-	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
-	return 0;
-}
-
-int
-fileobj_stat(const fileobj_t *fobj, struct stat *st)
-{
-	if (fstat(fobj->fd, st) == -1) {
+	if (fileobj_datasync(fobj) == -1) {
 		return -1;
 	}
-	st->st_size = fileobj_getsize(fobj);
+
+	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
 	return 0;
 }

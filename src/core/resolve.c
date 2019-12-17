@@ -109,50 +109,67 @@ rvault_resolve_path(rvault_t *vault, const char *path, size_t *rlen)
 		goto err;
 	}
 
-	*rlen = (size_t)asprintf(&fpath, "%s/%s",
+	len = (size_t)asprintf(&fpath, "%s/%s",
 	    vault->base_path ? vault->base_path : "",
 	    (*buf == '/') ? (buf + 1) : buf);
-
+	if (rlen) {
+		*rlen = len;
+	}
 err:
 	fclose(fp);
 	free(buf);
 
 	if (!fpath) {
 		app_log(LOG_ERR, "%s: failed to resolve `%s'", __func__, path);
+		errno = ENOENT;
+	} else {
+		app_log(LOG_DEBUG, "%s: `%s' -> `%s'", __func__, path, fpath);
 	}
 	return fpath;
 }
 
+/*
+ * rvault_resolve_vname: resolve vault name to the decrypted form.
+ */
 char *
 rvault_resolve_vname(rvault_t *vault, const char *vname, size_t *rlen)
 {
 	const size_t vlen = strlen(vname);
-	char *buf, *name;
+	char *buf = NULL, *name = NULL;
 	size_t blen, len;
 	ssize_t nbytes;
 
-	if (vlen == 0 || vname[0] == '.') {
-		// XXX
+	if (!vlen || strcmp(vname, ".") == 0 || strcmp(vname, "..") == 0) {
+		// XXX/FIXME
+		if (rlen) {
+			*rlen = vlen;
+		}
 		return strdup(vname);
 	}
 
 	if ((buf = hex_read_arbitrary_buf(vname, vlen, &len)) == NULL) {
-		return NULL;
+		goto err;
 	}
 	blen = crypto_get_buflen(vault->crypto, len);
 	if ((name = malloc(blen + 1)) == NULL) {
-		return NULL;
+		goto err;
 	}
 	nbytes = crypto_decrypt(vault->crypto, buf, len, name, blen);
 	if (nbytes == -1) {
-		app_log(LOG_ERR, "%s: failed to resolve `%s'", __func__, vname);
 		free(name);
+		name = NULL;
 		errno = EINVAL;
-		return NULL;
+		goto err;
 	}
+	name[nbytes] = '\0';
+	if (rlen) {
+		*rlen = nbytes;
+	}
+err:
 	free(buf);
 
-	name[nbytes] = '\0';
-	*rlen = nbytes;
+	if (name == NULL) {
+		app_log(LOG_ERR, "%s: failed to resolve `%s'", __func__, vname);
+	}
 	return name;
 }

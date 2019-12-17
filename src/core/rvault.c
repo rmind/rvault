@@ -20,6 +20,8 @@
 #include "crypto.h"
 #include "sys.h"
 
+#define	RVAULT_META_MODE	0600
+
 /*
  * open_metadata: normalize the path, check that it points to a directory,
  * open (or create) the vault metadata file
@@ -45,7 +47,7 @@ open_metadata(const char *base_path, char **normalized_path, int flags)
 	if (asprintf(&fpath, "%s/%s", bpath, APP_META_FILE) == -1) {
 		goto err;
 	}
-	if ((fd = open(fpath, flags, 0640)) == -1) {
+	if ((fd = open(fpath, flags, RVAULT_META_MODE)) == -1) {
 		app_log(LOG_CRIT, "could not open or create `%s'", fpath);
 		goto err;
 	}

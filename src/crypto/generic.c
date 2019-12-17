@@ -52,15 +52,15 @@ crypto_getrandbytes(void *buf, size_t len)
  * crypto_memzero: explicit (secure) zeroing.
  */
 
-void *(* volatile memset_funcptr)(void *, int, size_t) = memset;
+static volatile unsigned char crypto_memzero_xor;
 
 void
 crypto_memzero(void *buf, size_t len)
 {
-#if 0
-	memset_s(buf, len, 0, len);
-#else
-	volatile void *bufv = (volatile void *)buf;
-	(*memset_funcptr)((void *)(uintptr_t)bufv, 0, len);
-#endif
+	volatile unsigned char *bufp = (volatile void *)buf;
+
+	for (size_t i = 0; i < len; i++) {
+		crypto_memzero_xor ^= bufp[i];
+		bufp[i] = 0;
+	}
 }
