@@ -150,6 +150,7 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	if ((kp = kdf_create_params(&kp_len)) == NULL) {
 		goto err;
 	}
+	ASSERT(kp_len <= UINT8_MAX && iv_len <= UINT16_MAX);
 
 	/*
 	 * Derive the key: it will be needed for HMAC.
@@ -170,8 +171,9 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	}
 	hdr->ver = APP_ABI_VER;
 	hdr->cipher = cipher;
+	hdr->flags = 0;
+	hdr->kp_len = kp_len;
 	hdr->iv_len = htobe16(iv_len);
-	hdr->kp_len = htobe16(kp_len);
 	memcpy(RVAULT_HDR_TO_IV(hdr), iv, iv_len);
 	memcpy(RVAULT_HDR_TO_KP(hdr), kp, kp_len);
 
@@ -235,7 +237,7 @@ rvault_open(const char *path, const char *pwd)
 		goto err;
 	}
 	iv_len = be16toh(hdr->iv_len);
-	kp_len = be16toh(hdr->kp_len);
+	kp_len = hdr->kp_len;
 
 	/*
 	 * Verify the lengths: we can trust iv_len and kp_len after this.

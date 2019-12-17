@@ -10,8 +10,8 @@
 
 #include "utils.h"
 
-#define	STORAGE_ALIGNMENT	UINT64_C(64)
-#define	STORAGE_ALIGN(x)	roundup2((x), STORAGE_ALIGNMENT)
+#define	STORAGE_ALIGNMENT	UINT64_C(8)
+#define	STORAGE_ALIGN(x)	roundup2((size_t)(x), STORAGE_ALIGNMENT)
 
 /*
  * Vault information/metadata structure.  On-disk layout:
@@ -28,11 +28,14 @@
  *	+-----------------------+
  */
 
+#define	RVAULT_FL_AUTH	(1U << 0)	// authentication enabled
+
 typedef struct {
 	uint8_t		ver;
 	uint8_t		cipher;
+	uint8_t		flags;
+	uint8_t		kp_len;
 	uint16_t	iv_len;
-	uint16_t	kp_len;
 } __attribute__((packed)) rvault_hdr_t;
 
 #define	RVAULT_HDR_LEN		STORAGE_ALIGN(sizeof(rvault_hdr_t))
@@ -43,10 +46,10 @@ typedef struct {
     ((void *)((uintptr_t)(RVAULT_HDR_TO_IV(h)) + be16toh((h)->iv_len)))
 
 #define	RVAULT_HDR_TO_HMAC(h)	\
-    ((void *)((uintptr_t)(RVAULT_HDR_TO_KP(h)) + be16toh((h)->kp_len)))
+    ((void *)((uintptr_t)(RVAULT_HDR_TO_KP(h)) + (h)->kp_len))
 
 #define	RVAULT_HMAC_DATALEN(h)	\
-    ((size_t)RVAULT_HDR_LEN + be16toh((h)->iv_len) + be16toh((h)->kp_len))
+    (RVAULT_HDR_LEN + be16toh((h)->iv_len) + (h)->kp_len)
 
 #define	RVAULT_FILE_LEN(h)	(RVAULT_HMAC_DATALEN(h) + HMAC_SHA3_256_BUFLEN)
 
@@ -67,7 +70,8 @@ typedef struct {
 typedef struct {
 	uint8_t		ver;
 	uint8_t		_pad0;
-	uint16_t	hmac_len;
+	uint8_t		hmac_len;
+	uint8_t		edata_pad;
 	uint64_t	edata_len;
 } __attribute__((packed)) fileobj_hdr_t;
 
@@ -80,13 +84,15 @@ typedef struct {
 
 #define	FILEOBJ_EDATA_LEN(h)	be64toh((h)->edata_len)
 
-#define	FILEOBJ_HMAC_DATALEN(h)	((size_t)FILEOBJ_HDR_LEN + FILEOBJ_EDATA_LEN(h))
+#define	FILEOBJ_HMAC_DATALEN(h)	(FILEOBJ_HDR_LEN + FILEOBJ_EDATA_LEN(h))
 
-#define	FILEOBJ_FILE_LEN(h)	\
-    (FILEOBJ_HMAC_DATALEN(h) + be16toh((h)->hmac_len))
+#define	FILEOBJ_DATA_LEN(h)	(FILEOBJ_EDATA_LEN(h) - (h)->edata_pad)
 
-void *	storage_read_data(rvault_t *, int, size_t, size_t *);
+#define	FILEOBJ_FILE_LEN(h)	(FILEOBJ_HMAC_DATALEN(h) + (h)->hmac_len)
+
 int	storage_write_data(rvault_t *, int, const void *, size_t);
+void *	storage_read_data(rvault_t *, int, size_t, size_t *);
+ssize_t	storage_read_length(rvault_t *, int);
 
 void *	sbuffer_alloc(size_t);
 void *	sbuffer_move(void *, size_t, size_t);

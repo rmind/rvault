@@ -135,8 +135,10 @@ storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 	 * Setup the header.
 	 */
 	hdr->ver = APP_ABI_VER;
-	hdr->hmac_len = htobe16(HMAC_SHA3_256_BUFLEN);
+	hdr->hmac_len = HMAC_SHA3_256_BUFLEN;
 	hdr->edata_len = htobe64(nbytes);
+	hdr->edata_pad = (size_t)nbytes - len;
+	ASSERT(hdr->edata_pad < UINT8_MAX);
 
 	/*
 	 * Adjust the file length and compute the HMAC.
@@ -187,6 +189,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	 */
 	if (file_len < FILEOBJ_HDR_LEN) {
 		app_log(LOG_ERR, "data file corrupted");
+		errno = EIO;
 		return NULL;
 	}
 	hdr = safe_mmap(file_len, fd, 0);
@@ -196,6 +199,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	buf_len = FILEOBJ_EDATA_LEN(hdr);
 	if (file_len < FILEOBJ_FILE_LEN(hdr) || buf_len > file_len) {
 		app_log(LOG_ERR, "data file corrupted");
+		errno = EIO;
 		goto out;
 	}
 	if (buf_len == 0) {
@@ -213,7 +217,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	}
 	enc_buf = FILEOBJ_HDR_TO_DATA(hdr);
 	nbytes = crypto_decrypt(vault->crypto, enc_buf, buf_len, buf, buf_len);
-	if (nbytes == -1) {
+	if (nbytes == -1 || FILEOBJ_DATA_LEN(hdr) != (size_t)nbytes) {
 		app_log(LOG_ERR, "decryption failed");
 		sbuffer_free(buf, buf_len);
 		buf = NULL;
@@ -233,4 +237,18 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 out:
 	safe_munmap(hdr, file_len, 0);
 	return buf;
+}
+
+ssize_t
+storage_read_length(rvault_t *vault __unused, int fd)
+{
+	unsigned char buf[FILEOBJ_HDR_LEN];
+	fileobj_hdr_t *hdr = (void *)buf;
+
+	if (fs_read(fd, hdr, FILEOBJ_HDR_LEN) != FILEOBJ_HDR_LEN) {
+		app_log(LOG_ERR, "data file corrupted");
+		errno = EIO;
+		return -1;
+	}
+	return FILEOBJ_DATA_LEN(hdr);
 }
