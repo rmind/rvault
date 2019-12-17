@@ -82,12 +82,13 @@ typedef enum { FILE_READ, FILE_WRITE } file_op_t;
 static void
 do_file_io(rvault_t *vault, const char *target, file_op_t io)
 {
+	const int flags = (io == FILE_READ) ? O_RDONLY : (O_CREAT | O_RDWR);
 	fileobj_t *fobj;
 	void *buf = NULL;
 	ssize_t nbytes;
 	off_t off = 0;
 
-	if ((fobj = fileobj_open(vault, target, O_CREAT | O_RDWR)) == NULL) {
+	if ((fobj = fileobj_open(vault, target, flags, FOBJ_OMASK)) == NULL) {
 		err(EXIT_FAILURE, "failed to open `%s'", target);
 	}
 	switch (io) {
@@ -132,7 +133,6 @@ file_list_cmd(rvault_t *vault, int argc, char **argv)
 	const char *path;
 	char *vault_path;
 	struct dirent *dp;
-	size_t len;
 	DIR *dirp;
 	int ch;
 
@@ -156,7 +156,7 @@ file_list_cmd(rvault_t *vault, int argc, char **argv)
 	argv += optind;
 
 	path = argc ? argv[0] : "/";
-	if ((vault_path = rvault_resolve_path(vault, path, &len)) == NULL) {
+	if ((vault_path = rvault_resolve_path(vault, path, NULL)) == NULL) {
 		err(EXIT_FAILURE, "rvault_resolve_path");
 	}
 	dirp = opendir(vault_path);
@@ -168,10 +168,13 @@ file_list_cmd(rvault_t *vault, int argc, char **argv)
 	while ((dp = readdir(dirp)) != NULL) {
 		char *name;
 
+		if (dp->d_name[0] == '.') {
+			continue;
+		}
 		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
 			continue;
 		}
-		name = rvault_resolve_vname(vault, dp->d_name, &len);
+		name = rvault_resolve_vname(vault, dp->d_name, NULL);
 		if (name == NULL) {
 			err(EXIT_FAILURE, "rvault_resolve_vname");
 		}
@@ -234,7 +237,7 @@ usage(void)
 	    "  -v, --version            Print version information and quit\n"
 	    "\n"
 	    "Environment variables:\n"
-	    "  RVAULT_DATAPATH          Base path of the vault data\n"
+	    "  RVAULT_PATH              Base path of the vault data\n"
 	    "  RVAULT_SERVER            Authentication server address\n"
 	    "\n"
 	    "Commands:\n"
@@ -256,7 +259,7 @@ usage_datapath(void)
 	    APP_NAME ": please specify the base data path.\n\n"
 	    "  " APP_NAME " -d PATH COMMAND\n"
 	    "    or\n"
-	    "  RVAULT_DATAPATH=PATH " APP_NAME " COMMAND\n"
+	    "  RVAULT_PATH=PATH " APP_NAME " COMMAND\n"
 	    "\n"
 	);
 	exit(EXIT_FAILURE);
@@ -356,7 +359,7 @@ main(int argc, char **argv)
 		{ "version",	no_argument,		0,	'v' 	},
 		{ NULL,		0,			NULL,	0	}
 	};
-	const char *data_path = getenv("RVAULT_DATAPATH");
+	const char *data_path = getenv("RVAULT_PATH");
 	const char *server = getenv("RVAULT_SERVER");
 	int loglevel = LOG_WARNING;
 	int ch;
@@ -383,8 +386,16 @@ main(int argc, char **argv)
 			usage();
 		}
 	}
+
+	/*
+	 * Advance and reset: commands may call getopt() again.
+	 */
 	argc -= optind;
 	argv += optind;
+	optind = 1;
+#ifndef __linux__
+	optreset = 1;
+#endif
 
 	if (argc == 0) {
 		usage();

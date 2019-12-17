@@ -24,6 +24,10 @@
 #include "sys.h"
 #include "utils.h"
 
+/*
+ * "Secure" buffer API.  Takes extra care to erase the data on destruction.
+ */
+
 void *
 sbuffer_alloc(size_t len)
 {
@@ -33,15 +37,19 @@ sbuffer_alloc(size_t len)
 void *
 sbuffer_move(void *buf, size_t len, size_t newlen)
 {
-	void *nbuf;
+	void *nbuf = NULL;
 
-	nbuf = sbuffer_alloc(newlen);
-	if (nbuf == NULL) {
+	if (newlen && (nbuf = sbuffer_alloc(newlen)) == NULL) {
 		return NULL;
 	}
 	if (buf) {
 		ASSERT(len > 0);
-		memcpy(nbuf, buf, MIN(len, newlen));
+		if (nbuf) {
+			ASSERT(newlen > 0);
+			memcpy(nbuf, buf, MIN(len, newlen));
+		} else {
+			ASSERT(newlen == 0);
+		}
 		sbuffer_free(buf, len);
 	} else {
 		ASSERT(len == 0);
@@ -54,6 +62,10 @@ sbuffer_free(void *buf, size_t len)
 {
 	safe_munmap(buf, len, MMAP_ERASE);
 }
+
+/*
+ * HMAC computation and verification for file objects.
+ */
 
 static int
 storage_hmac_compute(rvault_t *vault, const void *buf, size_t len,
