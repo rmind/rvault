@@ -72,7 +72,7 @@ rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 	while ((dp = readdir(dirp)) != NULL) {
 		char *name;
 
-		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
+		if (!strncmp(dp->d_name, "rvault.", sizeof("rvault.") - 1)) {
 			continue;
 		}
 		name = rvault_resolve_vname(vault, dp->d_name, NULL);

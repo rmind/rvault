@@ -154,6 +154,26 @@ hex_read_arbitrary_buf(const void *buf, size_t len, size_t *outlen)
 }
 
 /*
+ * String helpers.
+ */
+
+unsigned
+str_tokenize(char *line, char **tokens, unsigned n)
+{
+	const char *sep = " \t";
+	unsigned i = 0;
+	char *token;
+
+	while ((token = strsep(&line, sep)) != NULL && i < n) {
+		if (*sep == '\0' || strpbrk(token, sep) != NULL) {
+			continue;
+		}
+		tokens[i++] = token;
+	}
+	return i;
+}
+
+/*
  * Logging facility.
  */
 
