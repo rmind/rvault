@@ -163,15 +163,12 @@ fileobj_stat(rvault_t *vault, const char *path, struct stat *st)
 	 * Regular and non-empty files are encrypted.
 	 */
 	if ((st->st_mode & S_IFMT) == S_IFREG && st->st_size > 0) {
-		unsigned char buf[FILEOBJ_HDR_LEN];
-		fileobj_hdr_t *hdr = (void *)buf;
+		ssize_t size;
 
-		if (fs_read(fd, hdr, FILEOBJ_HDR_LEN) != FILEOBJ_HDR_LEN) {
-			app_log(LOG_ERR, "%s: `%s' malformed", __func__, vpath);
-			errno = EIO;
+		if ((size = storage_read_length(vault, fd)) == -1) {
 			goto err;
 		}
-		st->st_size = FILEOBJ_EDATA_LEN(hdr);
+		st->st_size = size;
 	}
 	app_log(LOG_DEBUG, "%s: path `%s', size %zu",
 	    __func__, path, st->st_size);
@@ -211,12 +208,13 @@ fileobj_close(fileobj_t *fobj)
 ssize_t
 fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 {
-	ssize_t nbytes;
+	size_t nbytes;
 
-	if (fobj->buf == NULL) {
-		return 0;
+	if (offset < 0) {
+		errno = EINVAL;
+		return -1;
 	}
-	if (offset >= (off_t)fobj->len) {
+	if (fobj->buf == NULL || offset >= (off_t)fobj->len) {
 		return 0;
 	}
 	nbytes = MIN(fobj->len - offset, len);
@@ -231,44 +229,47 @@ ssize_t
 fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 {
 	uint64_t endoff;
-	ssize_t nbytes;
 
-	endoff = offset + len;
-	if (endoff < (uint64_t)offset) {
+	endoff = offset + len - 1;
+	if (offset < 0 || endoff < (uint64_t)offset) {
 		/* Overflow. */
 		errno = EINVAL;
 		return -1;
+	}
+	if (len == 0) {
+		return 0;
 	}
 
 	/*
 	 * Expand the memory buffer.
 	 */
-	if (endoff > fobj->len) {
+	if (endoff >= fobj->len) {
+		const size_t nlen = endoff + 1;
 		void *nbuf;
 
-		nbuf = sbuffer_move(fobj->buf, fobj->len, endoff);
+		nbuf = sbuffer_move(fobj->buf, fobj->len, nlen);
 		if (nbuf == 0) {
 			errno = ENOMEM;
 			return -1;
 		}
 		fobj->buf = nbuf;
-		fobj->len = endoff;
+		fobj->len = nlen;
 	}
 	ASSERT(fobj->buf != NULL);
 
-	/* Write the data. */
-	nbytes = fobj->len - offset;
-	memcpy(&fobj->buf[offset], buf, nbytes);
-
-	/* Sync to the backing store. */
+	/*
+	 * Write the data to the buffer.
+	 * Sync it to the backing store.
+	 */
+	memcpy(&fobj->buf[offset], buf, len);
 	if (fileobj_datasync(fobj) == -1) {
 		errno = EIO; // XXX
 		return -1;
 	}
 
-	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu] -> %zd",
-	    __func__, fobj, (intmax_t)offset, len, nbytes);
-	return (size_t)nbytes;
+	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
+	    __func__, fobj, (intmax_t)offset, len);
+	return (size_t)len;
 }
 
 size_t
