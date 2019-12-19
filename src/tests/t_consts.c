@@ -8,10 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <assert.h>
 
 #include "rvault.h"
 #include "crypto.h"
+#include "sys.h"
 #include "mock.h"
 #include "utils.h"
 
@@ -21,13 +24,12 @@
  *
  * cipher="-aes-256-cbc "
  * cipher="-chacha20"
-
+ *
  * printf "the quick brown fox jumped over the lazy dog" | \
  *   openssl enc $cipher \
  *   -iv 508c39cf1b4a706a219ab837981ba4b0 \
  *   -K 0705b45c2be368b6aadf21656a89dad8fed6172170b7e78f638a650dab05d7ea | \
  *   od -t x1
- *
  */
 
 static const char *test_iv =
@@ -50,6 +52,14 @@ static const uint8_t kdf_expected_val[] = {
 	0x3c, 0xde, 0x91, 0x65, 0xb0, 0x5b, 0x53, 0xbe,
 	0x45, 0x9d, 0x55, 0xcf, 0x5e, 0x69, 0x61, 0xed
 };
+
+static const char *rvault_v1_metadata =
+    "01 01 00 1c 00 10 00 00  f0 4e 0f 55 2d 48 f0 e9"
+    "23 0f b2 57 b1 bd 74 dc  01 00 00 00 00 00 00 00"
+    "00 00 40 00 d2 44 3f c5  e4 14 3a 7b e0 bb 3b cf"
+    "9e e3 d9 41 d3 06 4d 51  28 1e bb db 2a 54 bf ff"
+    "a2 78 82 e5 94 40 a8 a8  af 61 f0 33 c1 bf 6f e6"
+    "5a f8 5b fb";
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -99,12 +109,48 @@ test_crypto(crypto_cipher_t c, const char *iv_str, const char *key_str,
 	crypto_destroy(cf);
 }
 
+static void
+test_rvault_compat(const char *meta)
+{
+	char path[PATH_MAX], *base_path = get_vault_dir();
+	void *buf_meta;
+	size_t buf_len;
+	rvault_t *vault;
+	int fd, nbytes;
+
+	snprintf(path, sizeof(path) - 1, "%s/"APP_META_FILE, base_path);
+	fd = open(path, O_CREAT | O_TRUNC | O_RDWR, 0644);
+	assert(fd != -1);
+
+	/*
+	 * Write the metadata file.
+	 */
+	buf_meta = hex_readmem_arbitrary(meta, strlen(meta), &buf_len);
+	assert(buf_meta != NULL);
+
+	nbytes = fs_write(fd, buf_meta, buf_len);
+	assert(nbytes == (ssize_t)buf_len);
+
+	free(buf_meta);
+	close(fd);
+
+	/*
+	 * Attempt to open the vault.
+	 */
+	vault = rvault_open(base_path, "test");
+	assert(vault != NULL);
+	rvault_close(vault);
+
+	cleanup_vault_dir(base_path);
+}
+
 int
 main(void)
 {
 	test_kdf();
 	test_crypto(AES_256_CBC, test_iv, test_key, aes_expected_val);
 	test_crypto(CHACHA20, test_iv, test_key, chacha20_expected_val);
+	test_rvault_compat(rvault_v1_metadata);
 
 	puts("ok");
 	return 0;

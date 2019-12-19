@@ -29,27 +29,41 @@
 static void
 create_vault(const char *path, int argc, char **argv)
 {
-	if (argc > 1) {
-		const char *cipher = argv[1];
-		char *passphrase = NULL;
+	static const char *opts_s = "h?";
+	static struct option opts_l[] = {
+		{ "help",	no_argument,		0,	'h'	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	const char *cipher;
+	char *passphrase;
+	int ch;
 
-		if ((passphrase = getpass("Passphrase: ")) == NULL) {
-			errx(EXIT_FAILURE, "missing passphrase");
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+		switch (ch) {
+		case 'h':
+		case '?':
+		default:
+			fprintf(stderr,
+			    "Usage:\t" APP_NAME " create [CIPHER]\n"
+			    "\n"
+			    "Create a new vault\n"
+			    "\n"
+			);
+			exit(EXIT_FAILURE);
 		}
-		if (rvault_init(path, passphrase, cipher) == -1) {
-			err(EXIT_FAILURE, "failed to initialize metadata");
-		}
-		crypto_memzero(passphrase, strlen(passphrase));
-		passphrase = NULL; // diagnostic
-		return;
 	}
-	fprintf(stderr,
-	    "Usage:\t" APP_NAME " create CIPHER\n"
-	    "\n"
-	    "Create a new vault\n"
-	    "\n"
-	);
-	exit(EXIT_FAILURE);
+	argc -= optind;
+	argv += optind;
+
+	cipher = argc ? argv[0] : NULL;
+	if ((passphrase = getpass("Passphrase: ")) == NULL) {
+		errx(EXIT_FAILURE, "missing passphrase");
+	}
+	if (rvault_init(path, passphrase, cipher) == -1) {
+		err(EXIT_FAILURE, "failed to initialize metadata");
+	}
+	crypto_memzero(passphrase, strlen(passphrase));
+	passphrase = NULL; // diagnostic
 }
 
 static void
@@ -371,6 +385,9 @@ main(int argc, char **argv)
 	int loglevel = LOG_WARNING;
 	int ch;
 
+	for (argc0 = 1; argc0 < argc && argv[argc0][0] != '-'; argc0++) {
+		/* Process first level options; cap up to the command. */
+	}
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
 		case 'd':
@@ -412,6 +429,5 @@ main(int argc, char **argv)
 
 	app_setlog(loglevel);
 	process_command(data_path, server, argc, argv);
-
 	return EXIT_SUCCESS;
 }

@@ -80,6 +80,7 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 	if ((len = fs_file_size(fd)) < (ssize_t)RVAULT_HDR_LEN) {
 		app_log(LOG_CRIT, "metadata file corrupted");
 		free(*normalized_path);
+		*normalized_path = NULL;
 		close(fd);
 		return NULL;
 	}
@@ -138,8 +139,13 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	 * - Generate the KDF parameters.
 	 * - Generate the IV.
 	 */
-	if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
-		goto err;
+	if (cipher_str) {
+		if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
+			goto err;
+		}
+	} else {
+		/* Choose a default. */
+		cipher = CRYPTO_CIPHER_PRIMARY;
 	}
 	if ((crypto = crypto_create(cipher)) == NULL) {
 		goto err;
