@@ -21,20 +21,6 @@
 
 #include "sys.h"
 
-/*
- * fs_block_size: return the file system block size.
- */
-ssize_t
-fs_block_size(const char *path)
-{
-	struct statvfs sfs;
-
-	if (statvfs(path, &sfs) == -1) {
-		return -1;
-	}
-	return sfs.f_bsize;
-}
-
 ssize_t
 fs_file_size(int fd)
 {

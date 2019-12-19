@@ -78,6 +78,11 @@ endif
 # Dependencies: compiler flags and libraries to link.
 #
 
+SQLITE3_SERIALIZE:=	$(shell echo "\#include <sqlite3.h>\n\
+    main() { sqlite3_serialize(NULL, "", NULL, 0);}" | \
+    $(CC) -o /dev/null -Werror -xc - \
+    >/dev/null 2>/dev/null && echo 1 || echo 0)
+
 ifeq ($(SYSNAME),Darwin)
 # FIXME/XXX
 CFLAGS+=	-I/usr/local/include
@@ -90,7 +95,11 @@ LDFLAGS+=	$(shell pkg-config fuse --libs)
 
 LDFLAGS+=	-lscrypt
 LDFLAGS+=	-lssl -lcrypto
-LDFLAGS+=	-lcurl #-lreadline
+LDFLAGS+=	-lcurl -lreadline
+ifeq ($(SQLITE3_SERIALIZE),1)
+CFLAGS+=	-DSQLITE3_SERIALIZE
+LDFLAGS+=	-lsqlite3
+endif
 
 #
 # source
@@ -101,6 +110,9 @@ OBJS+=		core/cli.o
 OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
 OBJS+=		core/http_req.o
+ifeq ($(SQLITE3_SERIALIZE),1)
+OBJS+=		core/sdb.o
+endif
 OBJS+=		fuse/rvaultfs.o
 OBJS+=		sys/fs.o
 OBJS+=		sys/mmap.o

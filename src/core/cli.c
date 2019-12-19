@@ -20,6 +20,7 @@
 #include "rvault.h"
 #include "rvaultfs.h"
 #include "fileobj.h"
+#include "sdb.h"
 #include "sys.h"
 #include "utils.h"
 
@@ -39,7 +40,7 @@ create_vault(const char *path, int argc, char **argv)
 			err(EXIT_FAILURE, "failed to initialize metadata");
 		}
 		crypto_memzero(passphrase, strlen(passphrase));
-		free(passphrase);
+		passphrase = NULL; // diagnostic
 		return;
 	}
 	fprintf(stderr,
@@ -171,7 +172,7 @@ file_list_cmd(rvault_t *vault, int argc, char **argv)
 		if (dp->d_name[0] == '.') {
 			continue;
 		}
-		if (strcmp(dp->d_name, APP_META_FILE) == 0) {
+		if (!strncmp(dp->d_name, "rvault.", sizeof("rvault.") - 1)) {
 			continue;
 		}
 		name = rvault_resolve_vname(vault, dp->d_name, NULL);
@@ -243,8 +244,11 @@ usage(void)
 	    "Commands:\n"
 	    "  create           Create and initialize a new vault\n"
 	    "  ls               List the vault contents\n"
-	    "  read             Read a file from the vault\n"
 	    "  mount            Mount the encrypted vault as a file system\n"
+#ifdef SQLITE3_SERIALIZE
+	    "  sdb              CLI to operate secrets/passwords\n"
+#endif
+	    "  read             Read a file from the vault\n"
 	    "  write            Write a file to the vault\n"
 	    "\n"
 	    "Run '"APP_NAME" <COMMAND> -h' for more information on a command.\n"
@@ -276,9 +280,12 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 	} commands[] = {
 		/* "create" -- handled separately to create the vault */
 		{ "ls",		file_list_cmd,		},
+#ifdef SQLITE3_SERIALIZE
+		{ "sdb",	sdb_cli,		},
+#endif
+		{ "mount",	mount_vault,		},
 		{ "read",	file_read_cmd,		},
 		{ "write",	file_write_cmd,		},
-		{ "mount",	mount_vault,		},
 	};
 	char *passphrase = NULL;
 	cmd_func_t cmd_func = NULL;
@@ -316,7 +323,7 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 		err(EXIT_FAILURE, "failed to open metadata");
 	}
 	crypto_memzero(passphrase, strlen(passphrase));
-	free(passphrase);
+	passphrase = NULL; // diagnostic
 
 	/*
 	 * Run the operation.  Close the vault.

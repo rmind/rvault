@@ -178,6 +178,8 @@ ssize_t		hex_write_wrapped(FILE *, const void *, size_t);
 void *		hex_read_arbitrary(FILE *, size_t *);
 void *		hex_read_arbitrary_buf(const void *, size_t, size_t *);
 
+unsigned	str_tokenize(char *, char **, unsigned);
+
 void		app_setlog(int);
 void		app_log(int, const char *, ...);
 
