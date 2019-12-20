@@ -49,46 +49,6 @@ rvaultfs_getattr(const char *path, struct stat *st)
 }
 
 static int
-rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-    off_t offset __unused, struct fuse_file_info *fi __unused)
-{
-	rvault_t *vault = get_vault_ctx();
-	struct dirent *dp;
-	char *vpath;
-	DIR *dirp;
-
-	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-
-	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
-		return -errno;
-	}
-	dirp = opendir(vpath);
-	if (dirp == NULL) {
-		free(vpath);
-		return -errno;
-	}
-	free(vpath);
-
-	while ((dp = readdir(dirp)) != NULL) {
-		char *name;
-
-		if (!strncmp(dp->d_name, "rvault.", sizeof("rvault.") - 1)) {
-			continue;
-		}
-		name = rvault_resolve_vname(vault, dp->d_name, NULL);
-		if (name == NULL) {
-			const int ret = -errno;
-			closedir(dirp);
-			return ret;
-		}
-		filler(buf, name, NULL, 0);
-		free(name);
-	}
-	closedir(dirp);
-	return 0;
-}
-
-static int
 rvaultfs_truncate(const char *path, off_t size)
 {
 	rvault_t *vault = get_vault_ctx();
@@ -267,6 +227,51 @@ rvaultfs_rmdir(const char *path)
 	return (ret == -1) ? -errno : 0;
 }
 
+struct rvaultfs_readdir_iter_ctx {
+	fuse_fill_dir_t	filler;
+	void *		buf;
+};
+
+static void
+rvaultfs_readdir_iter(void *arg0, const char *name, struct dirent *dp __unused)
+{
+	struct rvaultfs_readdir_iter_ctx *arg = arg0;
+	arg->filler(arg->buf, name, NULL, 0);
+}
+
+static int
+rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
+    off_t offset __unused, struct fuse_file_info *fi __unused)
+{
+	struct rvaultfs_readdir_iter_ctx arg = { .filler = filler, .buf = buf };
+	rvault_t *vault = get_vault_ctx();
+
+	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
+
+	if (rvault_iter_dir(vault, path, &arg, rvaultfs_readdir_iter) == -1) {
+		return -errno;
+	}
+	return 0;
+}
+
+static int
+rvaultfs_chmod(const char *path, mode_t mode)
+{
+	if (chmod(path, mode) == -1) {
+		return -errno;
+	}
+	return 0;
+}
+
+static int
+rvaultfs_chown(const char *path, uid_t uid, gid_t gid)
+{
+	if (lchown(path, uid, gid) == -1) {
+		return -errno;
+	}
+	return 0;
+}
+
 static const struct fuse_operations rvaultfs_ops = {
 	.init		= rvaultfs_init,
 	.getattr	= rvaultfs_getattr,
@@ -281,6 +286,8 @@ static const struct fuse_operations rvaultfs_ops = {
 	.rename		= rvaultfs_rename,
 	.mkdir		= rvaultfs_mkdir,
 	.rmdir		= rvaultfs_rmdir,
+	.chmod		= rvaultfs_chmod,
+	.chown		= rvaultfs_chown,
 };
 
 int

@@ -118,7 +118,7 @@ test_rvault_compat(const char *meta)
 	rvault_t *vault;
 	int fd, nbytes;
 
-	snprintf(path, sizeof(path) - 1, "%s/"APP_META_FILE, base_path);
+	snprintf(path, sizeof(path) - 1, "%s/"RVAULT_META_FILE, base_path);
 	fd = open(path, O_CREAT | O_TRUNC | O_RDWR, 0644);
 	assert(fd != -1);
 

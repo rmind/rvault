@@ -24,7 +24,8 @@ test_basic(void)
 	rvault_t *vault;
 	int ret;
 
-	ret = rvault_init(base_path, passphrase, "aes-256-cbc");
+	ret = rvault_init(base_path, passphrase,
+	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
 	vault = rvault_open(base_path, passphrase);
@@ -43,7 +44,8 @@ test_invalid_passphrase(void)
 	rvault_t *vault;
 	int ret;
 
-	ret = rvault_init(base_path, "not-test", "aes-256-cbc");
+	ret = rvault_init(base_path, "not-test",
+	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
 	vault = rvault_open(base_path, passphrase);

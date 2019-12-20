@@ -138,7 +138,7 @@ storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 	/*
 	 * Setup the header.
 	 */
-	hdr->ver = APP_ABI_VER;
+	hdr->ver = RVAULT_ABI_VER;
 	hdr->cipher = vault->cipher;
 	hdr->aetag_len = -1; // to be set
 	hdr->edata_len = htobe64(nbytes);
@@ -171,7 +171,7 @@ storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 		nbytes = -1;
 		goto err;
 	}
-	fsync(fd); // XXX: sync the directory too
+	fs_sync(fd, NULL);
 	nbytes = file_len;
 err:
 	free(hdr);

@@ -18,12 +18,14 @@
 
 #include "rvault.h"
 #include "storage.h"
+#include "cli.h"
 #include "sys.h"
-#include "sdb.h"
 
 #if SQLITE_VERSION_NUMBER < 3023000
 #error need sqlite 3.23 or newer
 #endif
+
+#define	SDB_META_FILE		"rvault.sdb"
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -282,10 +284,14 @@ sdb_usage(void)
 }
 
 void
-sdb_cli(rvault_t *vault, int argc, char **argv)
+sdb_cli(const char *datapath, int argc, char **argv)
 {
+	rvault_t *vault;
 	sdb_t *sdb;
 	char *line;
+
+	vault = open_vault(datapath);
+	ASSERT(vault != NULL);
 
 	if ((sdb = sdb_open(vault)) == NULL) {
 		err(EXIT_FAILURE, "could not open the database");
@@ -301,6 +307,7 @@ sdb_cli(rvault_t *vault, int argc, char **argv)
 		free(line);
 	}
 	sdb_close(sdb);
+	rvault_close(vault);
 
 	(void)argc; (void)argv;
 }

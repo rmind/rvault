@@ -91,17 +91,42 @@ fs_write(int fd, const void *buf, size_t target)
 	return target - towrite;
 }
 
-int
-fs_sync_path(const char *path)
+static int
+sys_fs_sync(int fd)
 {
-	int fd;
-
-	if ((fd = open(path, O_RDONLY)) == -1)
-		return -1;
-	if (fsync(fd) == -1) {
-		close(fd);
+#if defined(F_FULLFSYNC)
+	/*
+	 * On Darwin, fsync() provides limited guarantees; it provides
+	 * F_FULLFSYNC for a "real" fsync.
+	 */
+	if (fcntl(fd, F_FULLFSYNC, 0) == -1) {
 		return -1;
 	}
-	close(fd);
+#else
+	if (fsync(fd) == -1) {
+		return -1;
+	}
+#endif
 	return 0;
+}
+
+/*
+ * fs_sync: perform effective fsync() on file descriptor and/or path.
+ */
+int
+fs_sync(int fd, const char *path)
+{
+	int ret = 0;
+
+	if (fd != -1 && sys_fs_sync(fd) == -1) {
+		return -1;
+	}
+	if (path) {
+		if ((fd = open(path, O_RDONLY)) == -1) {
+			return -1;
+		}
+		ret = sys_fs_sync(fd);
+		close(fd);
+	}
+	return ret;
 }

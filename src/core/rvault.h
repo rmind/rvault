@@ -14,8 +14,11 @@
 #define	APP_NAME		"rvault"
 #define	APP_PROJ_VER		"0.1"
 
-#define	APP_ABI_VER		1
-#define	APP_META_FILE		"rvault.metadata"
+#define	RVAULT_ABI_VER		1
+#define	RVAULT_META_FILE	"rvault.metadata"
+
+#define	RVAULT_META_PREF	"rvault."
+#define	RVAULT_META_PREFLEN	(sizeof(RVAULT_META_PREF) - 1)
 
 struct fileobj;
 
@@ -27,10 +30,16 @@ typedef struct {
 	unsigned		file_count;
 } rvault_t;
 
-int		rvault_init(const char *, const char *, const char *);
+#define	RVAULT_FLAG_NOAUTH	(1U << 0)	// authentication disabled
+
+int		rvault_init(const char *, const char *, const char *, unsigned);
 rvault_t *	rvault_open(const char *, const char *);
 void		rvault_close(rvault_t *);
 
+struct dirent;
+typedef void (*dir_iter_t)(void *, const char *, struct dirent *);
+
+int		rvault_iter_dir(rvault_t *, const char *, void *, dir_iter_t);
 char *		rvault_resolve_path(rvault_t *, const char *, size_t *);
 char *		rvault_resolve_vname(rvault_t *, const char *, size_t *);
 
