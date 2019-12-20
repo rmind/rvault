@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+#export DH_VERBOSE=1
+
+PROJ=rvault
+PKGVERSION:=$(shell cat version.txt)
+DEB_HOST_MULTIARCH?=$(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+SRCDIR:=SOURCES/$(PROJ)-$(PKGVERSION)
+
+BINDIR:=/usr/bin
+LIBDIR:=/usr/lib/$(DEB_HOST_MULTIARCH)
+INCDIR:=/usr/include
+MANDIR:=/usr/share/man
+
+%:
+	dh $@ --sourcedirectory=$(SRCDIR) --parallel
+
+override_dh_auto_test:
+	dh_auto_test tests
+
+override_dh_auto_build:
+	dh_auto_build -- clean all
+
+override_dh_auto_install:
+	dh_auto_install -- \
+	    BINDIR=$(BINDIR) MANDIR=$(MANDIR)
+
+override_dh_strip:
+	dh_strip -p $(PROJ) --dbg-package=$(PROJ)-dbg
+	dh_strip -a --remaining-packages
+
+override_dh_gencontrol:
+	dh_gencontrol -- -v$(PKGVERSION)
