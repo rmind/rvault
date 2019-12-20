@@ -63,14 +63,14 @@ typedef struct {
  *	| encrypted binary data	|
  *	| [padding]		|
  *	+-----------------------+
- *	| HMAC or TAG		|
+ *	| AE TAG or HMAC	|
  *	+-----------------------+
  */
 
 typedef struct {
 	uint8_t		ver;
-	uint8_t		_pad0;
-	uint8_t		hmac_len;
+	uint8_t		cipher;
+	uint8_t		aetag_len;
 	uint8_t		edata_pad;
 	uint64_t	edata_len;
 } __attribute__((packed)) fileobj_hdr_t;
@@ -79,16 +79,18 @@ typedef struct {
 
 #define	FILEOBJ_HDR_TO_DATA(h)	((void *)((uintptr_t)(h) + FILEOBJ_HDR_LEN))
 
-#define	FILEOBJ_HDR_TO_HMAC(h)	\
+#define	FILEOBJ_HDR_TO_AETAG(h)	\
     ((void *)((uintptr_t)FILEOBJ_HDR_TO_DATA(h) + FILEOBJ_EDATA_LEN(h)))
 
 #define	FILEOBJ_EDATA_LEN(h)	be64toh((h)->edata_len)
+
+#define	FILEOBJ_AETAG_LEN(h)	((h)->aetag_len)
 
 #define	FILEOBJ_HMAC_DATALEN(h)	(FILEOBJ_HDR_LEN + FILEOBJ_EDATA_LEN(h))
 
 #define	FILEOBJ_DATA_LEN(h)	(FILEOBJ_EDATA_LEN(h) - (h)->edata_pad)
 
-#define	FILEOBJ_FILE_LEN(h)	(FILEOBJ_HMAC_DATALEN(h) + (h)->hmac_len)
+#define	FILEOBJ_FILE_LEN(h)	(FILEOBJ_HMAC_DATALEN(h) + (h)->aetag_len)
 
 int	storage_write_data(rvault_t *, int, const void *, size_t);
 void *	storage_read_data(rvault_t *, int, size_t, size_t *);

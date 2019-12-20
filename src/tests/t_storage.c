@@ -71,6 +71,8 @@ main(void)
 	app_setlog(LOG_CRIT);
 	run_tests("aes-256-cbc");
 	run_tests("chacha20");
+	run_tests("aes-256-gcm");
+	run_tests("chacha20-poly1305");
 
 	puts("ok");
 	return 0;

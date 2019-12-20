@@ -8,6 +8,8 @@
 #ifndef	_CRYPTO_H_
 #define	_CRYPTO_H_
 
+#include <stdbool.h>
+
 /*
  * WARNING: used in the on-disk format; keep backwards compatibility.
  */
@@ -37,14 +39,16 @@ typedef struct crypto_ops {
 struct crypto {
 	crypto_cipher_t	cipher;
 
-	/* Key, IV and block lengths. */
+	/* Key, IV, block and tag lengths. */
 	size_t		klen;
 	size_t		ilen;
 	size_t		blen;
+	size_t		tlen;
 
-	/* Key and IV buffers. */
+	/* Key, IV and tag buffers. */
 	void *		key;
 	void *		iv;
+	void *		tag;
 
 	/* Arbitrary implementation-defined context and operations. */
 	void *		ctx;
@@ -86,6 +90,10 @@ int		crypto_set_passphrasekey(crypto_t *, const char *,
 int		crypto_set_key(crypto_t *, const void *, size_t);
 const void *	crypto_get_key(const crypto_t *, size_t *);
 ssize_t		crypto_get_keylen(const crypto_t *);
+
+bool		crypto_using_ae(const crypto_t *);
+int		crypto_set_tag(crypto_t *, const void *, size_t);
+const void *	crypto_get_tag(crypto_t *, size_t *);
 
 size_t		crypto_get_buflen(const crypto_t *, size_t);
 

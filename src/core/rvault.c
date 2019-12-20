@@ -260,6 +260,7 @@ rvault_open(const char *path, const char *pwd)
 	if (crypto_set_passphrasekey(vault->crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
+	vault->cipher = hdr->cipher;
 
 	/*
 	 * Verify the HMAC.  Note: need the crypto object to obtain the key.

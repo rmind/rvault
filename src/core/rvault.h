@@ -21,6 +21,7 @@ struct fileobj;
 
 typedef struct {
 	char *			base_path;
+	crypto_cipher_t		cipher;
 	crypto_t *		crypto;
 	LIST_HEAD(, fileobj)	file_list;
 	unsigned		file_count;
