@@ -217,62 +217,54 @@ lua_crypto_set_key(lua_State *L)
  * ENCRYPT/DECRYPT.
  */
 
+typedef enum { CRYPTO_DO_ENCRYPT, CRYPTO_DO_DECRYPT } crypto_action_t;
+
 static int
-lua_crypto_encrypt(lua_State *L)
+lua_crypto_process(lua_State *L, crypto_action_t action)
 {
 	crypto_lua_t *lctx = lua_crypto_getctx(L);
-	size_t datalen, buflen;
+	size_t dlen, blen;
 	const void *data;
-	void *enc_buf;
 	ssize_t nbytes;
+	void *buf;
 
-	data = lua_tolstring(L, 2, &datalen);
+	data = lua_tolstring(L, 2, &dlen);
 	luaL_argcheck(L, data, 2, "binary `string' expected");
-	if (datalen == 0) {
+	if (dlen == 0) {
 		return 0;
 	}
 
-	buflen = crypto_get_buflen(lctx->crypto, datalen);
-	if ((enc_buf = malloc(buflen)) == NULL) {
+	blen = crypto_get_buflen(lctx->crypto, dlen);
+	if ((buf = malloc(blen)) == NULL) {
 		luaL_error(L, "OOM");
 		return 0;
 	}
-	nbytes = crypto_encrypt(lctx->crypto, data, datalen, enc_buf, buflen);
+	switch (action) {
+	case CRYPTO_DO_ENCRYPT:
+		nbytes = crypto_encrypt(lctx->crypto, data, dlen, buf, blen);
+		break;
+	case CRYPTO_DO_DECRYPT:
+		nbytes = crypto_decrypt(lctx->crypto, data, dlen, buf, blen);
+		break;
+	}
 	if (nbytes == -1) {
-		free(enc_buf);
-		luaL_error(L, "crypto_encrypt failed");
+		free(buf);
+		luaL_error(L, "%s failed");
 		return 0;
 	}
-	lua_pushlstring(L, enc_buf, nbytes);
-	free(enc_buf);
+	lua_pushlstring(L, buf, nbytes);
+	free(buf);
 	return 1;
+}
+
+static int
+lua_crypto_encrypt(lua_State *L)
+{
+	return lua_crypto_process(L, CRYPTO_DO_ENCRYPT);
 }
 
 static int
 lua_crypto_decrypt(lua_State *L)
 {
-	crypto_lua_t *lctx = lua_crypto_getctx(L);
-	const void *data;
-	void *dec_buf;
-	size_t datalen;
-	ssize_t nbytes;
-
-	data = lua_tolstring(L, 2, &datalen);
-	luaL_argcheck(L, data, 2, "binary `string' expected");
-	if (datalen == 0) {
-		return 0;
-	}
-	if ((dec_buf = malloc(datalen)) == NULL) {
-		luaL_error(L, "OOM");
-		return 0;
-	}
-	nbytes = crypto_decrypt(lctx->crypto, data, datalen, dec_buf, datalen);
-	if (nbytes == -1) {
-		free(dec_buf);
-		luaL_error(L, "crypto_encrypt failed");
-		return 0;
-	}
-	lua_pushlstring(L, dec_buf, nbytes);
-	free(dec_buf);
-	return 1;
+	return lua_crypto_process(L, CRYPTO_DO_DECRYPT);
 }

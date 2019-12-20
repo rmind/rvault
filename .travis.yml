@@ -12,8 +12,9 @@ matrix:
       arch: amd64
     - os: linux
       arch: arm64
-    - os: linux
-      arch: ppc64le
+    # Travis transitional failures
+    #- os: linux
+    #  arch: ppc64le
     - os: osx
       osx_image: xcode11.2
 

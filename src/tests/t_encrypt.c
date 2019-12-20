@@ -17,11 +17,12 @@
 
 static void
 test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
-    const char *passphrase)
+    const char *passphrase, const bool should_use_ae)
 {
 	char *iv, *dec_buf, *enc_buf;
+	size_t len, buflen, aetaglen;
 	ssize_t ret, nbytes;
-	size_t len, buflen;
+	const void *aetag;
 	crypto_t *cf;
 
 	/*
@@ -46,6 +47,11 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 	assert(enc_buf != NULL);
 	nbytes = crypto_encrypt(cf, data, datalen, enc_buf, buflen);
 	assert(nbytes > 0);
+
+	aetag = crypto_get_tag(cf, &aetaglen);
+	assert(aetag || !should_use_ae);
+	ret = crypto_set_tag(cf, aetag, aetaglen);
+	assert(ret == 0);
 
 	/*
 	 * Get another buffer and decrypt.
@@ -76,8 +82,11 @@ test_sizes(const unsigned *sizes, size_t count, unsigned multi)
 		assert(buf != NULL);
 		crypto_getrandbytes(buf, len);
 
-		test_encdec(AES_256_CBC, buf, len, TEST_TEXT);
-		test_encdec(CHACHA20, buf, len, TEST_TEXT);
+		test_encdec(AES_256_CBC, buf, len, TEST_TEXT, false);
+		test_encdec(CHACHA20, buf, len, TEST_TEXT, false);
+
+		test_encdec(AES_256_GCM, buf, len, TEST_TEXT, false);
+		test_encdec(CHACHA20_POLY1305, buf, len, TEST_TEXT, false);
 
 		free(buf);
 	}
@@ -99,11 +108,17 @@ main(void)
 	static const uint8_t zeros[15] = {0};
 
 	/* 15 bytes of zeros. */
-	test_encdec(AES_256_CBC, zeros, sizeof(zeros), "meow");
+	test_encdec(AES_256_CBC, zeros, sizeof(zeros), "meow", false);
+	test_encdec(AES_256_GCM, zeros, sizeof(zeros), "meow", false);
 
-	/* AES 256 + CBC and ChaCha20. */
-	test_encdec(AES_256_CBC, TEST_TEXT, sizeof(TEST_TEXT), "meow");
-	test_encdec(CHACHA20, TEST_TEXT, sizeof(TEST_TEXT), "meow");
+	/*
+	 * Basic cipher tests.
+	 */
+	test_encdec(AES_256_CBC, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
+	test_encdec(CHACHA20, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
+
+	test_encdec(AES_256_GCM, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
+	test_encdec(CHACHA20_POLY1305, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
 
 	/* Large dataset: from bytes to megabytes and a gigabyte. */
 	test_size_profiles();

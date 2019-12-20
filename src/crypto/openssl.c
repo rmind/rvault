@@ -67,6 +67,21 @@ openssl_crypto_create(crypto_t *crypto)
 	crypto->klen = EVP_CIPHER_key_length(cipher);
 	crypto->ilen = EVP_CIPHER_iv_length(cipher);
 	crypto->blen = EVP_CIPHER_block_size(cipher);
+
+	switch (crypto->cipher) {
+	case AES_256_GCM:
+	case CHACHA20_POLY1305:
+		/*
+		 * Both ciphers use 128-bit authentication tag.
+		 */
+		crypto->tlen = 16;
+		if ((crypto->tag = malloc(crypto->tlen)) == NULL) {
+			return -1;
+		}
+		break;
+	default:
+		crypto->tlen = 0;
+	}
 	return 0;
 }
 
@@ -82,12 +97,6 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 	unsigned char *bufp;
 	ssize_t nbytes = -1;
 	int len;
-
-	if (crypto->cipher == AES_256_GCM ||
-	    crypto->cipher == CHACHA20_POLY1305) {
-		errno = ENOTSUP; // TODO
-		return -1;
-	}
 
 	/* Note: OpenSSL APIs take signed int. */
 	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
@@ -114,6 +123,13 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 		goto err;
 	}
 	nbytes += len;
+
+	/* If AE cipher: obtain the authentication tag. */
+	if (crypto->tlen && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG,
+	    crypto->tlen, crypto->tag) != 1) {
+		nbytes = -1;
+		goto err;
+	}
 err:
 	EVP_CIPHER_CTX_free(ctx);
 	return nbytes;
@@ -131,12 +147,6 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 	unsigned char *bufp;
 	ssize_t nbytes = -1;
 	int len;
-
-	if (crypto->cipher == AES_256_GCM ||
-	    crypto->cipher == CHACHA20_POLY1305) {
-		errno = ENOTSUP; // TODO
-		return -1;
-	}
 
 	/* Note: OpenSSL APIs take signed int. */
 	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
@@ -156,6 +166,13 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 		goto err;
 	}
 	nbytes += len;
+
+	/* If AE cipher: verify the authentication tag. */
+	if (crypto->tlen && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
+	    crypto->tlen, crypto->tag) != 1) {
+		nbytes = -1;
+		goto err;
+	}
 
 	if (EVP_DecryptFinal_ex(ctx, bufp + nbytes, &len) != 1) {
 		nbytes = -1;

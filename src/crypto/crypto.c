@@ -212,6 +212,39 @@ crypto_get_keylen(const crypto_t *crypto)
 	return crypto->klen;
 }
 
+/*
+ * crypto_using_ae: indicate the cipher uses authenticated encryption (AE).
+ */
+bool
+crypto_using_ae(const crypto_t *crypto)
+{
+	return crypto->tlen != 0;
+}
+
+/*
+ * crypto_set_tag: set the authentication tag; applicable for the ciphers
+ * which support AE, e.g. AES in GCM mode or Chacha20 with Poly1305.
+ */
+int
+crypto_set_tag(crypto_t *crypto, const void *tag, size_t len)
+{
+	if (crypto->tlen != len) {
+		return -1;
+	}
+	if (!crypto->tag && (crypto->tag = malloc(crypto->tlen)) == NULL) {
+		return -1;
+	}
+	memcpy(crypto->tag, tag, crypto->tlen);
+	return 0;
+}
+
+const void *
+crypto_get_tag(crypto_t *crypto, size_t *tag_len)
+{
+	*tag_len = crypto->tlen;
+	return crypto->tag;
+}
+
 size_t
 crypto_get_buflen(const crypto_t *crypto, size_t length)
 {
@@ -219,6 +252,8 @@ crypto_get_buflen(const crypto_t *crypto, size_t length)
 	 * As per OpenSSL documentation:
 	 * - Encryption: in_bytes + cipher_block_size - 1
 	 * - Decryption: in_bytes + cipher_block_size
+	 *
+	 * Just add a block size, to keep it simple.
 	 */
 	return length + crypto->blen;
 }
@@ -272,6 +307,9 @@ crypto_destroy(crypto_t *crypto)
 	}
 	if (crypto->iv) {
 		free(crypto->iv);
+	}
+	if (crypto->tag) {
+		free(crypto->tag);
 	}
 	free(crypto);
 }
