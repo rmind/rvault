@@ -383,8 +383,7 @@ main(int argc, char **argv)
 			server = optarg;
 			break;
 		case 'v':
-			printf(APP_NAME " version " APP_PROJ_VER ", "
-			    "built on " __DATE__ "\n");
+			printf(APP_NAME " version " APP_PROJ_VER "\n");
 			exit(EXIT_SUCCESS);
 			break;
 		case 'h':

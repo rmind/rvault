@@ -27,8 +27,10 @@ addons:
     - debhelper
     - libssl-dev
     - libscrypt-dev
-    - libreadline-dev
     - libfuse-dev
+    - libcurl4
+    - libreadline-dev
+    - libsqlite3-dev
     - liblua5.3-dev
     - lua5.3
   homebrew:
@@ -41,6 +43,8 @@ addons:
     - osxfuse
 
 script:
+  # Build and install the DEB packages.
+  - if [ "$(uname -s)" = "Linux" ]; then (cd pkg && make deb && sudo dpkg -i ../rvault*.deb); fi
   # Run the unit tests.
   - (cd src && make clean && make -j4 && make tests)
   # Run the Lua tests.
