@@ -16,7 +16,7 @@ ssize_t		fs_block_size(const char *);
 ssize_t		fs_file_size(int);
 ssize_t		fs_read(int, void *, size_t);
 ssize_t		fs_write(int, const void *, size_t);
-int		fs_sync_path(const char *);
+int		fs_sync(int, const char *);
 
 typedef enum {
 	MMAP_WRITEABLE	= 0x1,

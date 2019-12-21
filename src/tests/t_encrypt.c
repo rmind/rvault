@@ -50,8 +50,10 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 
 	aetag = crypto_get_tag(cf, &aetaglen);
 	assert(aetag || !should_use_ae);
-	ret = crypto_set_tag(cf, aetag, aetaglen);
-	assert(ret == 0);
+	if (aetag) {
+		ret = crypto_set_tag(cf, aetag, aetaglen);
+		assert(ret == 0);
+	}
 
 	/*
 	 * Get another buffer and decrypt.

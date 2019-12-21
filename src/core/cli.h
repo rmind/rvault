@@ -5,11 +5,10 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
-#ifndef	_SDB_H_
-#define	_SDB_H_
+#ifndef	_CLI_H_
+#define	_CLI_H_
 
-#define	SDB_META_FILE		"rvault.sdb"
-
-void	sdb_cli(rvault_t *, int, char **);
+rvault_t *	open_vault(const char *);
+void		sdb_cli(const char *, int, char **);
 
 #endif

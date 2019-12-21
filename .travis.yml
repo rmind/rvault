@@ -12,7 +12,7 @@ matrix:
       arch: amd64
     - os: linux
       arch: arm64
-    # Travis transitional failures
+    # Travis transient failures
     #- os: linux
     #  arch: ppc64le
     - os: osx

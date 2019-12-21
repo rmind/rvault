@@ -56,7 +56,7 @@ void
 cleanup_vault_dir(char *path)
 {
 	char metafile[PATH_MAX];
-	snprintf(metafile, sizeof(metafile), "%s/%s", path, APP_META_FILE);
+	snprintf(metafile, sizeof(metafile), "%s/%s", path, RVAULT_META_FILE);
 	unlink(metafile);
 	rmdir(path);
 	free(path);
@@ -70,7 +70,7 @@ get_vault(const char *cipher, char **path)
 	rvault_t *vault;
 
 	rvault_init(base_path, passphrase,
-	    cipher ? cipher : "aes-256-cbc");
+	    cipher ? cipher : "aes-256-cbc", RVAULT_FLAG_NOAUTH);
 	vault = rvault_open(base_path, passphrase);
 	free(passphrase);
 

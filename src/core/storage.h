@@ -28,8 +28,6 @@
  *	+-----------------------+
  */
 
-#define	RVAULT_FL_AUTH	(1U << 0)	// authentication enabled
-
 typedef struct {
 	uint8_t		ver;
 	uint8_t		cipher;

@@ -13,6 +13,8 @@
 #include <inttypes.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <dirent.h>
+#include <errno.h>
 
 #include "rvault.h"
 #include "fileobj.h"
@@ -30,36 +32,41 @@
  * => On success, also return the normalized base path.
  */
 static int
-open_metadata(const char *base_path, char **normalized_path, int flags)
+open_metadata(const char *path, char **normalized_path, int flags)
 {
-	char *bpath, *fpath = NULL;
+	char *rpath, *fpath = NULL;
 	struct stat st;
 	int fd;
 
-	if ((bpath = realpath(base_path, NULL)) == NULL) {
-		app_log(LOG_CRIT, "location `%s' not found", base_path);
+	if ((rpath = realpath(path, NULL)) == NULL) {
+		app_log(LOG_CRIT, APP_NAME": location `%s' not found", path);
 		return -1;
 	}
-	if (stat(bpath, &st) == -1 || (st.st_mode & S_IFMT) != S_IFDIR) {
-		app_log(LOG_CRIT, "path `%s' is not a directory", bpath);
+	if (stat(rpath, &st) == -1 || (st.st_mode & S_IFMT) != S_IFDIR) {
+		app_log(LOG_CRIT,
+		    APP_NAME": path `%s' is not a directory", rpath);
 		goto err;
 	}
-	if (asprintf(&fpath, "%s/%s", bpath, APP_META_FILE) == -1) {
+	if (asprintf(&fpath, "%s/%s", rpath, RVAULT_META_FILE) == -1) {
+		app_log(LOG_CRIT, APP_NAME": could not allocate memory");
 		goto err;
 	}
 	if ((fd = open(fpath, flags, RVAULT_META_MODE)) == -1) {
-		app_log(LOG_CRIT, "could not open or create `%s'", fpath);
+		app_log(LOG_CRIT, APP_NAME": could not %s `%s': %s",
+		    (flags & O_CREAT) ? "create" : "open", fpath,
+		    strerror(errno));
 		goto err;
 	}
-	if (normalized_path) {
-		*normalized_path = bpath;
-	} else {
-		free(bpath);
-	}
 	free(fpath);
+
+	if (normalized_path) {
+		*normalized_path = rpath;
+	} else {
+		free(rpath);
+	}
 	return fd;
 err:
-	free(bpath);
+	free(rpath);
 	free(fpath);
 	return -1;
 }
@@ -78,8 +85,9 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 		return NULL;
 	}
 	if ((len = fs_file_size(fd)) < (ssize_t)RVAULT_HDR_LEN) {
-		app_log(LOG_CRIT, "metadata file corrupted");
+		app_log(LOG_CRIT, "rvault: metadata file corrupted");
 		free(*normalized_path);
+		*normalized_path = NULL;
 		close(fd);
 		return NULL;
 	}
@@ -122,7 +130,8 @@ rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
  * rvault_init: initialize a new vault.
  */
 int
-rvault_init(const char *path, const char *pwd, const char *cipher_str)
+rvault_init(const char *path, const char *pwd,
+    const char *cipher_str, unsigned flags)
 {
 	crypto_cipher_t cipher;
 	crypto_t *crypto = NULL;
@@ -138,8 +147,16 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	 * - Generate the KDF parameters.
 	 * - Generate the IV.
 	 */
-	if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
-		goto err;
+	if (cipher_str) {
+		if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
+			app_log(LOG_CRIT,
+			    APP_NAME": invalid or unsupported cipher `%s'",
+			    cipher_str);
+			goto err;
+		}
+	} else {
+		/* Choose a default. */
+		cipher = CRYPTO_CIPHER_PRIMARY;
 	}
 	if ((crypto = crypto_create(cipher)) == NULL) {
 		goto err;
@@ -150,7 +167,8 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	if ((kp = kdf_create_params(&kp_len)) == NULL) {
 		goto err;
 	}
-	ASSERT(kp_len <= UINT8_MAX && iv_len <= UINT16_MAX);
+	ASSERT(kp_len <= UINT8_MAX);
+	ASSERT(iv_len <= UINT16_MAX);
 
 	/*
 	 * Derive the key: it will be needed for HMAC.
@@ -169,9 +187,12 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 	if ((hdr = calloc(1, file_len)) == NULL) {
 		goto err;
 	}
-	hdr->ver = APP_ABI_VER;
+	ASSERT(cipher <= UINT8_MAX);
+	ASSERT(flags <= UINT8_MAX);
+
+	hdr->ver = RVAULT_ABI_VER;
 	hdr->cipher = cipher;
-	hdr->flags = 0;
+	hdr->flags = flags;
 	hdr->kp_len = kp_len;
 	hdr->iv_len = htobe16(iv_len);
 	memcpy(RVAULT_HDR_TO_IV(hdr), iv, iv_len);
@@ -196,10 +217,7 @@ rvault_init(const char *path, const char *pwd, const char *cipher_str)
 		close(fd);
 		goto err;
 	}
-
-	/* Note: fsync() both the file and the directory. */
-	fsync(fd);
-	fs_sync_path(path);
+	fs_sync(fd, path);
 	close(fd);
 	ret = 0;
 err:
@@ -233,7 +251,10 @@ rvault_open(const char *path, const char *pwd)
 	if (hdr == NULL) {
 		goto err;
 	}
-	if (hdr->ver != APP_ABI_VER) {
+	if (hdr->ver != RVAULT_ABI_VER) {
+		app_log(LOG_CRIT, "rvault: incompatible vault version %u\n"
+		    "Hint: vault might have been created using a newer "
+		    "application version", hdr->ver);
 		goto err;
 	}
 	iv_len = be16toh(hdr->iv_len);
@@ -266,7 +287,7 @@ rvault_open(const char *path, const char *pwd)
 	 * Verify the HMAC.  Note: need the crypto object to obtain the key.
 	 */
 	if (rvault_hmac_verify(vault->crypto, hdr) != 0) {
-		app_log(LOG_INFO, "HMAC verification failed: "
+		app_log(LOG_CRIT, "rvault: verification failed: "
 		    "invalid passphrase?");
 		goto err;
 	}
@@ -303,4 +324,48 @@ rvault_close(rvault_t *vault)
 		crypto_destroy(vault->crypto);
 	}
 	free(vault);
+}
+
+/*
+ * rvault_iter_dir: iterate the directory in the vault.
+ */
+int
+rvault_iter_dir(rvault_t *vault, const char *path,
+    void *arg, dir_iter_t iterfunc)
+{
+	struct dirent *dp;
+	char *vpath;
+	DIR *dirp;
+
+	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+		return -1;
+	}
+	dirp = opendir(vpath);
+	if (dirp == NULL) {
+		free(vpath);
+		return -1;
+	}
+	free(vpath);
+
+	while ((dp = readdir(dirp)) != NULL) {
+		const char *vname = dp->d_name;
+		char *name;
+
+		if (vname[0] == '.') {
+			continue;
+		}
+		if (!strncmp(vname, RVAULT_META_PREF, RVAULT_META_PREFLEN)) {
+			continue;
+		}
+
+		name = rvault_resolve_vname(vault, vname, NULL);
+		if (name == NULL) {
+			closedir(dirp);
+			return -1;
+		}
+		iterfunc(arg, name, dp);
+		free(name);
+	}
+	closedir(dirp);
+	return 0;
 }
