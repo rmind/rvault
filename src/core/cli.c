@@ -397,7 +397,17 @@ main(int argc, char **argv)
 	const char *server = getenv("RVAULT_SERVER");
 	int ch, loglevel = LOG_WARNING;
 
-	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+	for (;;) {
+		/*
+		 * Parse the options until the first command only.
+		 */
+		if (argv[optind] && *argv[optind] != '-') {
+			break;
+		}
+		ch = getopt_long(argc, argv, opts_s, opts_l, NULL);
+		if (ch == -1) {
+			break;
+		}
 		switch (ch) {
 		case 'd':
 			data_path = optarg;
