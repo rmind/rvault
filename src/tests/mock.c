@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <unistd.h>
 #include <limits.h>
 #include <assert.h>
@@ -69,9 +70,9 @@ get_vault(const char *cipher, char **path)
 	char *passphrase = strdup("test");
 	rvault_t *vault;
 
-	rvault_init(base_path, passphrase,
+	rvault_init(base_path, NULL, passphrase, TEST_UUID,
 	    cipher ? cipher : "aes-256-cbc", RVAULT_FLAG_NOAUTH);
-	vault = rvault_open(base_path, passphrase);
+	vault = rvault_open(base_path, NULL, passphrase);
 	free(passphrase);
 
 	*path = base_path;

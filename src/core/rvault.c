@@ -24,6 +24,20 @@
 
 #define	RVAULT_META_MODE	0600
 
+static void
+usage_srvurl(void)
+{
+	app_log(LOG_CRIT,
+	    APP_NAME ": please specify the server URL.\n\n"
+	    "  " APP_NAME " -s URL COMMAND\n"
+	    "    or\n"
+	    "  RVAULT_SERVER=URL " APP_NAME " COMMAND\n"
+	    "\n"
+	    "e.g.: https://api.example.org\n"
+	    "\n"
+	);
+}
+
 /*
  * open_metadata: normalize the path, check that it points to a directory,
  * open (or create) the vault metadata file
@@ -130,15 +144,15 @@ rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
  * rvault_init: initialize a new vault.
  */
 int
-rvault_init(const char *path, const char *pwd,
-    const char *cipher_str, unsigned flags)
+rvault_init(const char *path, const char *server, const char *pwd,
+    const char *uid_str, const char *cipher_str, unsigned flags)
 {
 	crypto_cipher_t cipher;
 	crypto_t *crypto = NULL;
 	rvault_hdr_t *hdr = NULL;
-	void *iv = NULL, *kp = NULL;
+	void *iv = NULL, *kp = NULL, *uid = NULL;
+	size_t file_len, iv_len, kp_len, uid_len;
 	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
-	size_t file_len, iv_len, kp_len;
 	int ret = -1, fd;
 
 	/*
@@ -162,6 +176,9 @@ rvault_init(const char *path, const char *pwd,
 		goto err;
 	}
 	if ((iv = crypto_gen_iv(crypto, &iv_len)) == NULL) {
+		goto err;
+	}
+	if (crypto_set_iv(crypto, iv, iv_len) == -1) {
 		goto err;
 	}
 	if ((kp = kdf_create_params(&kp_len)) == NULL) {
@@ -198,6 +215,37 @@ rvault_init(const char *path, const char *pwd,
 	memcpy(RVAULT_HDR_TO_IV(hdr), iv, iv_len);
 	memcpy(RVAULT_HDR_TO_KP(hdr), kp, kp_len);
 
+	uid = hex_read_arbitrary_buf(uid_str, strlen(uid_str), &uid_len);
+	if (uid == NULL || uid_len != sizeof(hdr->uid)) {
+		app_log(LOG_CRIT, APP_NAME": invalid user ID (UID); "
+		    "it must be UUID in hex representation.");
+		goto err;
+	}
+	memcpy(hdr->uid, uid, uid_len);
+
+	/*
+	 * Register with the remote and post the double-encrypted key.
+	 */
+	if ((flags & RVAULT_FLAG_NOAUTH) == 0) {
+		rvault_t vault; // XXX dummy
+
+		if (!server) {
+			usage_srvurl();
+			goto err;
+		}
+
+		memset(&vault, 0, sizeof(rvault_t));
+		vault.server_url = server;
+		vault.crypto = crypto;
+		memcpy(vault.uid, uid, uid_len);
+
+		if (rvault_key_set(&vault) == -1) {
+			app_log(LOG_DEBUG, "%s() failed: %s",
+			    __func__, strerror(errno));
+			goto err;
+		}
+	}
+
 	/*
 	 * Compute the HMAC and write it to the file.  Copy it over.
 	 */
@@ -228,6 +276,7 @@ err:
 	free(hdr);
 	free(iv);
 	free(kp);
+	free(uid);
 	return ret;
 }
 
@@ -235,7 +284,7 @@ err:
  * rvault_open: open the vault at the given directory.
  */
 rvault_t *
-rvault_open(const char *path, const char *pwd)
+rvault_open(const char *path, const char *server, const char *pwd)
 {
 	rvault_t *vault;
 	rvault_hdr_t *hdr;
@@ -245,6 +294,7 @@ rvault_open(const char *path, const char *pwd)
 	if ((vault = calloc(1, sizeof(rvault_t))) == NULL) {
 		return NULL;
 	}
+	vault->server_url = server;
 	LIST_INIT(&vault->file_list);
 
 	hdr = open_metadata_mmap(path, &vault->base_path, &file_len);
@@ -252,11 +302,15 @@ rvault_open(const char *path, const char *pwd)
 		goto err;
 	}
 	if (hdr->ver != RVAULT_ABI_VER) {
-		app_log(LOG_CRIT, "rvault: incompatible vault version %u\n"
+		app_log(LOG_CRIT, APP_NAME": incompatible vault version %u\n"
 		    "Hint: vault might have been created using a newer "
 		    "application version", hdr->ver);
 		goto err;
 	}
+	vault->cipher = hdr->cipher;
+	memcpy(vault->uid, hdr->uid, sizeof(hdr->uid));
+	static_assert(sizeof(vault->uid) == sizeof(hdr->uid), "UUID length");
+
 	iv_len = be16toh(hdr->iv_len);
 	kp_len = hdr->kp_len;
 
@@ -281,16 +335,29 @@ rvault_open(const char *path, const char *pwd)
 	if (crypto_set_passphrasekey(vault->crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
-	vault->cipher = hdr->cipher;
+
+	/*
+	 * Authenticate and fetch the key.
+	 */
+	if ((hdr->flags & RVAULT_FLAG_NOAUTH) == 0) {
+		if (!server) {
+			usage_srvurl();
+			goto err;
+		}
+		if (rvault_key_get(vault) == -1) {
+			goto err;
+		}
+	}
 
 	/*
 	 * Verify the HMAC.  Note: need the crypto object to obtain the key.
 	 */
 	if (rvault_hmac_verify(vault->crypto, hdr) != 0) {
-		app_log(LOG_CRIT, "rvault: verification failed: "
+		app_log(LOG_CRIT, APP_NAME": verification failed: "
 		    "invalid passphrase?");
 		goto err;
 	}
+
 	return vault;
 err:
 	rvault_close(vault);

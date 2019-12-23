@@ -284,13 +284,13 @@ sdb_usage(void)
 }
 
 void
-sdb_cli(const char *datapath, int argc, char **argv)
+sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 {
 	rvault_t *vault;
 	sdb_t *sdb;
 	char *line;
 
-	vault = open_vault(datapath);
+	vault = open_vault(datapath, server);
 	ASSERT(vault != NULL);
 
 	if ((sdb = sdb_open(vault)) == NULL) {

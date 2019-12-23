@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -54,12 +55,13 @@ static const uint8_t kdf_expected_val[] = {
 };
 
 static const char *rvault_v1_metadata =
-    "01 01 00 1c 00 10 00 00  f0 4e 0f 55 2d 48 f0 e9"
-    "23 0f b2 57 b1 bd 74 dc  01 00 00 00 00 00 00 00"
-    "00 00 40 00 d2 44 3f c5  e4 14 3a 7b e0 bb 3b cf"
-    "9e e3 d9 41 d3 06 4d 51  28 1e bb db 2a 54 bf ff"
-    "a2 78 82 e5 94 40 a8 a8  af 61 f0 33 c1 bf 6f e6"
-    "5a f8 5b fb";
+    "01 01 01 1c 00 10 6d 2f 2e 03 dd 71 41 29 85 ab"
+    "d5 e3 eb 3b 3e 47 00 00 f6 e9 26 4b bb b5 19 63"
+    "d4 0a 2f 81 77 1c 3f c3 01 00 00 00 00 00 00 00"
+    "00 00 40 00 ab 57 19 47 fe e3 bd eb 19 e3 71 ec"
+    "4c 7f fd fd 5f 43 25 03 a3 db e5 1b a0 a5 83 45"
+    "73 c7 21 44 b3 1e 5d 8a ce 98 e5 d0 9b 44 23 f2"
+    "7d 6e 6c be";
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -137,7 +139,7 @@ test_rvault_compat(const char *meta)
 	/*
 	 * Attempt to open the vault.
 	 */
-	vault = rvault_open(base_path, "test");
+	vault = rvault_open(base_path, NULL, "test");
 	assert(vault != NULL);
 	rvault_close(vault);
 

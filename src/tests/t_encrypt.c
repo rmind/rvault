@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <assert.h>
 
@@ -48,8 +49,15 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 	nbytes = crypto_encrypt(cf, data, datalen, enc_buf, buflen);
 	assert(nbytes > 0);
 
-	aetag = crypto_get_tag(cf, &aetaglen);
-	assert(aetag || !should_use_ae);
+	if (crypto_using_ae(cf)) {
+		assert(should_use_ae);
+		aetag = crypto_get_tag(cf, &aetaglen);
+		assert(aetag != NULL);
+	} else {
+		assert(!should_use_ae);
+		aetag = NULL;
+	}
+
 	if (aetag) {
 		ret = crypto_set_tag(cf, aetag, aetaglen);
 		assert(ret == 0);
@@ -87,8 +95,8 @@ test_sizes(const unsigned *sizes, size_t count, unsigned multi)
 		test_encdec(AES_256_CBC, buf, len, TEST_TEXT, false);
 		test_encdec(CHACHA20, buf, len, TEST_TEXT, false);
 
-		test_encdec(AES_256_GCM, buf, len, TEST_TEXT, false);
-		test_encdec(CHACHA20_POLY1305, buf, len, TEST_TEXT, false);
+		test_encdec(AES_256_GCM, buf, len, TEST_TEXT, true);
+		test_encdec(CHACHA20_POLY1305, buf, len, TEST_TEXT, true);
 
 		free(buf);
 	}
@@ -111,7 +119,7 @@ main(void)
 
 	/* 15 bytes of zeros. */
 	test_encdec(AES_256_CBC, zeros, sizeof(zeros), "meow", false);
-	test_encdec(AES_256_GCM, zeros, sizeof(zeros), "meow", false);
+	test_encdec(AES_256_GCM, zeros, sizeof(zeros), "meow", true);
 
 	/*
 	 * Basic cipher tests.
@@ -119,8 +127,8 @@ main(void)
 	test_encdec(AES_256_CBC, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
 	test_encdec(CHACHA20, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
 
-	test_encdec(AES_256_GCM, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
-	test_encdec(CHACHA20_POLY1305, TEST_TEXT, TEST_TEXT_LEN, "meow", false);
+	test_encdec(AES_256_GCM, TEST_TEXT, TEST_TEXT_LEN, "meow", true);
+	test_encdec(CHACHA20_POLY1305, TEST_TEXT, TEST_TEXT_LEN, "meow", true);
 
 	/* Large dataset: from bytes to megabytes and a gigabyte. */
 	test_size_profiles();

@@ -8,7 +8,8 @@
 #ifndef	_CLI_H_
 #define	_CLI_H_
 
-rvault_t *	open_vault(const char *);
+void		usage_srvurl(bool);
+rvault_t *	open_vault(const char *, const char *);
 void		sdb_cli(const char *, int, char **);
 
 #endif

@@ -105,6 +105,7 @@ endif
 # source
 #
 OBJS+=		core/rvault.o
+OBJS+=		core/keyauth.o
 OBJS+=		core/resolve.o
 OBJS+=		core/cli.o
 OBJS+=		core/storage.o
