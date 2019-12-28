@@ -3,6 +3,7 @@
 #
 
 BIN=		rvault
+MANS1=		$(BIN).1
 
 SYSNAME:=	$(shell uname -s)
 SYSARCH:=	$(shell uname -m)
@@ -164,6 +165,7 @@ endif
 #
 
 install:	IBINDIR=	$(DESTDIR)/$(BINDIR)
+install:	IMAN1DIR=	$(DESTDIR)/$(MANDIR)/man1/
 install:	LUA_ILIBDIR=	$(DESTDIR)/$(LUA_LIBDIR)/
 
 all: $(OBJS)
@@ -176,6 +178,7 @@ $(LUA_LIB): $(LUA_OBJS)
 
 install:
 	mkdir -p $(IBINDIR) && install -c $(BIN) $(IBINDIR)
+	mkdir -p $(IMAN1DIR) && install -c $(MANS1) $(IMAN1DIR)
 
 clean:
 	rm -f $(BIN) $(OBJS) $(TESTS) $(TEST_OBJS)

@@ -1,0 +1,144 @@
+.\"
+.\" Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+.\" All rights reserved.
+.\"
+.\" Redistribution and use in source and binary forms, with or without
+.\" modification, are permitted provided that the following conditions
+.\" are met:
+.\" 1. Redistributions of source code must retain the above copyright
+.\"    notice, this list of conditions and the following disclaimer.
+.\" 2. Redistributions in binary form must reproduce the above copyright
+.\"    notice, this list of conditions and the following disclaimer in the
+.\"    documentation and/or other materials provided with the distribution.
+.\"
+.\" THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+.\" ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+.\" IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+.\" ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+.\" FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+.\" DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+.\" OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+.\" HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+.\" LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+.\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+.\" SUCH DAMAGE.
+.\"
+.Dd December 28, 2019
+.Dt RVAULT 1
+.Os
+.Sh NAME
+.Nm rvault
+.Nd secure and authenticated store for secrets and small documents
+.Sh SYNOPSIS
+.Nm
+.\" -----
+.Op Ar options
+.Ar command
+.Op Ar args
+.\" -----
+.Sh DESCRIPTION
+.Nm
+is a secure and authenticated store for secrets (passwords,
+keys, certificates) and small documents.
+It uses
+.Em envelope encryption
+with one-time password (OTP) authentication.
+.\" -----
+.Sh OPTIONS
+The general options are:
+.Bl -tag -width indent
+.It Fl d|--datapath Ar path
+Base path to the vault data.
+.It Fl h|--help
+Show the application help text.
+.It Fl l|--log-level Ar level
+Set the log level:
+.Cm DEBUG ,
+.Cm INFO ,
+.Cm WARNING ,
+.Cm ERROR ,
+.Cm CRITICAL .
+.Pp
+The levels are case insensitive.
+.It Fl s, --server Ar url
+Authentication server address.
+.It Fl v, --version
+Print version information and quit.
+.El
+.\" -----
+.Sh COMMANDS
+The first argument,
+.Ar command ,
+specifies the action to take.
+Available commands are:
+.Bl -tag -width create -offset 3n
+.It Ic create Ar uid
+Create a new vault with the given UID.
+.Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl n|--noauth
+No authentication.
+WARNING: Such use case is very significantly less secure.
+.It Fl c|--cipher Ar cipher
+Cipher to be used for encryption.
+.It Fl h
+Show help of this command.
+.El
+.\" ---
+.It Ic ls Oo Fl h Oc Op path
+List the vault contents.
+.Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl h
+Show help of this command.
+.El
+.\" ---
+.It Ic sdb
+Enter the command line interface (CLI) to operate the database of secrets
+(e.g. passwords).
+The following inner commands are available within the CLI:
+.Bl -tag -width xxxxxxxxx -offset 3n
+.It Cm LS
+List secrets.
+.It Cm GET Ar name
+Get the secret value.
+.It Cm SET Ar name
+Set the secret value.
+.It Cm DEL Ar name
+Delete the secret.
+.El
+.Pp
+The given names must not have white spaces.
+The secret will be asked in a prompt.
+.\" ---
+.It Ic mount Ar path
+Mount the vault as a FUSE file system at the given path.
+.\" ---
+.It Ic read Ar path
+Read and decrypt the file in the vault.
+.\" ---
+.It Ic write Ar path
+Encrypt and write the file into the vault
+.El
+.Pp
+All paths for these commands must represent the namespace of vault.
+.\" -----
+.Sh ENVIRONMENT VARIABLES
+The following environment variables are available:
+.Bl -tag -width Ev
+.It Ev RVAULT_PATH
+Base path of the vault data.
+.It Ev RVAULT_SERVER
+Authentication server address.
+.El
+.\" -----
+.Sh EXAMPLES
+An example how to initialize and mount a new vault:
+.Bd -literal -offset indent
+export RVAULT_SERVER=...
+export RVAULT_PATH=/home/user/vault
+
+rvault create
+rvault mount /mnt/vault
+.Ed
+.\" -----
+.Sh AUTHORS
+.An Mindaugas Rasiukevicius Aq Mt rmind@noxt.eu
