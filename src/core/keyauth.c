@@ -29,11 +29,9 @@ api_url(const char *server_url, const char *route)
 	bool api_path;
 
 	if (strncasecmp(server_url, prefix, sizeof(prefix) - 1) != 0) {
-#if 0 // FIXME
 		app_log(LOG_CRIT, APP_NAME": invalid URL "
 		    "(must start with %s)", prefix);
 		return NULL;
-#endif
 	}
 	api_path = strcasestr(server_url, suffix) != NULL;
 	if (asprintf(&api_url, "%s/%s/%s", server_url,
