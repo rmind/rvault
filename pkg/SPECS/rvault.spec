@@ -54,6 +54,6 @@ make install \
 
 %files
 %{_bindir}/*
-#%{_mandir}/*
+%{_mandir}/*
 
 %changelog

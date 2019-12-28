@@ -5,6 +5,55 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * rvault: a secure and authenticated store for secrets and small documents.
+ * It uses _envelope encryption_ and OTP or other authentication mechanism
+ * together with server.
+ *
+ * Solution and cryptography
+ *
+ *	There are two keys: 1) K_p -- a local key generated from a passphrase;
+ *	2) K_e -- a randomly generated key used to encrypt/decrypt the data.
+ *
+ *	Initialization:
+ *
+ *	- User (client) securely registers itself with the server, presenting
+ *	its unique identification (UID) and authentication parameters, e.g.
+ *	OTP secret / token sequence.
+ *
+ *	- Envelope encryption: client generates K_p and K_e and encrypts
+ *	K_e using K_p, producing K_s.  It then sends K_s to the server and
+ *	destroys all keys.  None of the keys are stored locally.
+ *
+ *	- The server then stores UID, authentication details and K_s.
+ *
+ *	Data access:
+ *
+ *	- The user is asked for a passphrase to re-generate the K_p.
+ *
+ *	- To access the data (one file or mount a file system), the client
+ *	needs to authenticate with the server by sending UID and the OTP
+ *	token.  Upon successful authentication, the server responds with K_s.
+ *
+ *	- The client then obtains K_e by decrypting K_s with K_p.  The data
+ *	can now be encrypted/decrypted.
+ *
+ *	- The keys are safely destroyed after the access (or unmount of the
+ *	file system).  The access time may also be time-limited (e.g. forced
+ *	unmount with key destruction after 5 minutes of inactivity).
+ *
+ * Algorithms:
+ *
+ * - scrypt for the key derivation function (KDF).
+ * - The passphrase is salted with a random value stored locally.
+ * - AES 256 (CBC mode) or Chacha20 for symmetric encryption.
+ * - Authenticated encryption:
+ *       a) HMAC using SHA3 and MAC-then-Encrypt (MtE).
+ *       b) AES+GCM and Chacha20+Poly1305 as alternatives to HMAC.
+ * - The client-server communication is only over TLS.
+ * - Authentication with the server using TOTP (RFC 6238).
+ */
+
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
