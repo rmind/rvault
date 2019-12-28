@@ -24,17 +24,25 @@ struct fileobj;
 
 typedef struct {
 	char *			base_path;
+	const char *		server_url;
+
 	crypto_cipher_t		cipher;
 	crypto_t *		crypto;
+	uint8_t			uid[16];
+
 	LIST_HEAD(, fileobj)	file_list;
 	unsigned		file_count;
 } rvault_t;
 
 #define	RVAULT_FLAG_NOAUTH	(1U << 0)	// authentication disabled
 
-int		rvault_init(const char *, const char *, const char *, unsigned);
-rvault_t *	rvault_open(const char *, const char *);
+int		rvault_init(const char *, const char *, const char *,
+		    const char *, const char *, unsigned);
+rvault_t *	rvault_open(const char *, const char *, const char *);
 void		rvault_close(rvault_t *);
+
+int		rvault_key_set(rvault_t *);
+int		rvault_key_get(rvault_t *);
 
 struct dirent;
 typedef void (*dir_iter_t)(void *, const char *, struct dirent *);

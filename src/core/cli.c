@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
@@ -23,37 +24,86 @@
 #include "sys.h"
 #include "utils.h"
 
+static void
+usage(void)
+{
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " [OPTIONS] COMMAND\n"
+	    "\n"
+	    "Options:\n"
+	    "  -d, --datapath PATH    Base path to the vault data\n"
+	    "  -h, --help             Show this help text\n"
+	    "  -l, --log-level LEVEL  Set log level "
+	    "(DEBUG, INFO, WARNING, ERROR, CRITICAL)\n"
+	    "  -s, --server URL       Authentication server address\n"
+	    "  -v, --version          Print version information and quit\n"
+	    "\n"
+	    "Environment variables:\n"
+	    "  RVAULT_PATH            Base path of the vault data\n"
+	    "  RVAULT_SERVER          Authentication server address\n"
+	    "\n"
+	    "Commands:\n"
+	    "  create           Create and initialize a new vault\n"
+	    "  ls               List the vault contents\n"
+	    "  mount            Mount the encrypted vault as a file system\n"
+	    "  sdb              CLI to operate secrets/passwords\n"
+	    "  read             Read a file from the vault\n"
+	    "  write            Write a file to the vault\n"
+	    "\n"
+	    "Run '"APP_NAME" <COMMAND> -h' for more information on a command.\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
+static void
+usage_datapath(void)
+{
+	fprintf(stderr,
+	    APP_NAME ": please specify the base data path.\n\n"
+	    "  " APP_NAME " -d PATH COMMAND\n"
+	    "    or\n"
+	    "  RVAULT_PATH=PATH " APP_NAME " COMMAND\n"
+	    "\n"
+	);
+	exit(EXIT_FAILURE);
+}
+
 //////////////////////////////////////////////////////////////////////////////
 
 static void
-create_vault(const char *path, int argc, char **argv)
+create_vault(const char *path, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "hn?";
+	static const char *opts_s = "c:hn?";
 	static struct option opts_l[] = {
+		{ "cipher",	required_argument,	0,	'c'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ "noauth",	no_argument,		0,	'n'	},
 		{ NULL,		0,			NULL,	0	}
 	};
+	const char *uid, *cipher = NULL;
 	unsigned flags = 0;
-	const char *cipher;
 	char *passphrase;
 	int ch;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
+		case 'c':
+			cipher = optarg;
+			break;
 		case 'n':
 			flags |= RVAULT_FLAG_NOAUTH;
 			break;
 		case 'h':
 		case '?':
 		default:
-			fprintf(stderr,
-			    "Usage:\t" APP_NAME " create [CIPHER]\n"
+usage:			fprintf(stderr,
+			    "Usage:\t" APP_NAME " create UID\n"
 			    "\n"
-			    "Create a new vault.\n"
+			    "Create a new vault with the given UID.\n"
 			    "\n"
 			    "Options:\n"
-			    "  -n|--noauth  No authentication "
+			    "  -c|--cipher CIPHER  Cipher\n"
+			    "  -n|--noauth         No authentication "
 			    "(WARNING: this is much less secure)"
 			    "\n"
 			);
@@ -62,12 +112,19 @@ create_vault(const char *path, int argc, char **argv)
 	}
 	argc -= optind;
 	argv += optind;
+	if (argc == 0) {
+		goto usage;
+	}
+	uid = argv[0];
 
-	cipher = argc ? argv[0] : NULL;
+	if (flags & RVAULT_FLAG_NOAUTH) {
+		puts("WARNING: You chose no authentication -- "
+		    "it is much less secure!");
+	}
 	if ((passphrase = getpass("Passphrase: ")) == NULL) {
 		errx(EXIT_FAILURE, "missing passphrase");
 	}
-	if (rvault_init(path, passphrase, cipher, flags) == -1) {
+	if (rvault_init(path, server, passphrase, uid, cipher, flags) == -1) {
 		fprintf(stderr, "vault creation failed -- exiting.\n");
 		exit(EXIT_FAILURE);
 	}
@@ -76,7 +133,7 @@ create_vault(const char *path, int argc, char **argv)
 }
 
 rvault_t *
-open_vault(const char *datapath)
+open_vault(const char *datapath, const char *server)
 {
 	char *passphrase = NULL;
 	rvault_t *vault;
@@ -91,7 +148,7 @@ open_vault(const char *datapath)
 	/*
 	 * Open the vault; erase the passphrase immediately.
 	 */
-	vault = rvault_open(datapath, passphrase);
+	vault = rvault_open(datapath, server, passphrase);
 	if (vault == NULL) {
 		fprintf(stderr, "failed to open the vault -- exiting.\n");
 		exit(EXIT_FAILURE);
@@ -104,7 +161,7 @@ open_vault(const char *datapath)
 //////////////////////////////////////////////////////////////////////////////
 
 static void
-mount_vault(const char *datapath, int argc, char **argv)
+mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
 		const char *mountpoint = argv[1];
@@ -114,7 +171,7 @@ mount_vault(const char *datapath, int argc, char **argv)
 			err(EXIT_FAILURE, "daemon");
 		}
 #endif
-		vault = open_vault(datapath);
+		vault = open_vault(datapath, server);
 		rvaultfs_run(vault, mountpoint);
 		rvault_close(vault);
 		return;
@@ -188,7 +245,7 @@ file_list_cmd_iter(void *arg, const char *name, struct dirent *dp)
 }
 
 static void
-file_list_cmd(const char *datapath, int argc, char **argv)
+file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	static const char *opts_s = "h?";
 	static struct option opts_l[] = {
@@ -217,20 +274,20 @@ file_list_cmd(const char *datapath, int argc, char **argv)
 	argc -= optind;
 	argv += optind;
 
-	vault = open_vault(datapath);
+	vault = open_vault(datapath, server);
 	path = argc ? argv[0] : "/";
 	rvault_iter_dir(vault, path, NULL, file_list_cmd_iter);
 	rvault_close(vault);
 }
 
 static void
-file_read_cmd(const char *datapath, int argc, char **argv)
+file_read_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
 		const char *target = argv[1];
 		rvault_t *vault;
 
-		vault = open_vault(datapath);
+		vault = open_vault(datapath, server);
 		do_file_io(vault, target, FILE_READ);
 		rvault_close(vault);
 		return;
@@ -246,13 +303,13 @@ file_read_cmd(const char *datapath, int argc, char **argv)
 }
 
 static void
-file_write_cmd(const char *datapath, int argc, char **argv)
+file_write_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
 		const char *target = argv[1];
 		rvault_t *vault;
 
-		vault = open_vault(datapath);
+		vault = open_vault(datapath, server);
 		do_file_io(vault, target, FILE_WRITE);
 		rvault_close(vault);
 		return;
@@ -269,55 +326,11 @@ file_write_cmd(const char *datapath, int argc, char **argv)
 
 //////////////////////////////////////////////////////////////////////////////
 
-static void
-usage(void)
-{
-	fprintf(stderr,
-	    "Usage:\t" APP_NAME " [OPTIONS] COMMAND\n"
-	    "\n"
-	    "Options:\n"
-	    "  -d, --datapath PATH      Base path to the vault data\n"
-	    "  -h, --help               Show this help text\n"
-	    "  -l, --log-level LEVEL    Set log level "
-	    "(DEBUG, INFO, WARNING, ERROR, CRITICAL)\n"
-	    "  -s, --server ADDRESS     Authentication server address\n"
-	    "  -v, --version            Print version information and quit\n"
-	    "\n"
-	    "Environment variables:\n"
-	    "  RVAULT_PATH              Base path of the vault data\n"
-	    "  RVAULT_SERVER            Authentication server address\n"
-	    "\n"
-	    "Commands:\n"
-	    "  create           Create and initialize a new vault\n"
-	    "  ls               List the vault contents\n"
-	    "  mount            Mount the encrypted vault as a file system\n"
-	    "  sdb              CLI to operate secrets/passwords\n"
-	    "  read             Read a file from the vault\n"
-	    "  write            Write a file to the vault\n"
-	    "\n"
-	    "Run '"APP_NAME" <COMMAND> -h' for more information on a command.\n"
-	);
-	exit(EXIT_FAILURE);
-}
-
-static void
-usage_datapath(void)
-{
-	fprintf(stderr,
-	    APP_NAME ": please specify the base data path.\n\n"
-	    "  " APP_NAME " -d PATH COMMAND\n"
-	    "    or\n"
-	    "  RVAULT_PATH=PATH " APP_NAME " COMMAND\n"
-	    "\n"
-	);
-	exit(EXIT_FAILURE);
-}
-
 #ifndef SQLITE3_SERIALIZE
 static void
-sdb_sqlite3_mismatch(const char *d, int argc, char **argv)
+sdb_sqlite3_mismatch(const char *d, const char *server, int argc, char **argv)
 {
-	(void)d; (void)argc; (void)argv;
+	(void)d; (void)server; (void)argc; (void)argv;
 	fprintf(stderr,
 	    APP_NAME ": this command is not supported; "
 	    "you need sqlite 3.23 or newer,\n"
@@ -327,7 +340,7 @@ sdb_sqlite3_mismatch(const char *d, int argc, char **argv)
 }
 #endif
 
-typedef void (*cmd_func_t)(const char *, int, char **);
+typedef void (*cmd_func_t)(const char *, const char *, int, char **);
 
 static void
 process_command(const char *datapath, const char *server, int argc, char **argv)
@@ -351,7 +364,7 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 	for (unsigned i = 0; i < __arraycount(commands); i++) {
 		if (strcmp(commands[i].name, argv[0]) == 0) {
 			/* Run the command. */
-			commands[i].func(datapath, argc, argv);
+			commands[i].func(datapath, server, argc, argv);
 			return;
 		}
 	}

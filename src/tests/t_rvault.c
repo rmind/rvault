@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <unistd.h>
 #include <limits.h>
@@ -24,11 +25,11 @@ test_basic(void)
 	rvault_t *vault;
 	int ret;
 
-	ret = rvault_init(base_path, passphrase,
+	ret = rvault_init(base_path, NULL, passphrase, TEST_UUID,
 	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
-	vault = rvault_open(base_path, passphrase);
+	vault = rvault_open(base_path, NULL, passphrase);
 	assert(vault != NULL);
 	rvault_close(vault);
 
@@ -44,11 +45,11 @@ test_invalid_passphrase(void)
 	rvault_t *vault;
 	int ret;
 
-	ret = rvault_init(base_path, "not-test",
+	ret = rvault_init(base_path, NULL, "not-test", TEST_UUID,
 	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
-	vault = rvault_open(base_path, passphrase);
+	vault = rvault_open(base_path, NULL, passphrase);
 	assert(vault == NULL);
 
 	cleanup_vault_dir(base_path);

@@ -34,6 +34,7 @@ typedef struct {
 	uint8_t		flags;
 	uint8_t		kp_len;
 	uint16_t	iv_len;
+	uint8_t		uid[16];
 } __attribute__((packed)) rvault_hdr_t;
 
 #define	RVAULT_HDR_LEN		STORAGE_ALIGN(sizeof(rvault_hdr_t))

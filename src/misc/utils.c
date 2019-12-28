@@ -41,6 +41,25 @@ hex_write(FILE *stream, const void *buf, size_t len)
 	return nbytes;
 }
 
+char *
+hex_write_str(const void *buf, size_t len)
+{
+	char *str = NULL;
+	size_t slen;
+	FILE *fp;
+
+	if ((fp = open_memstream(&str, &slen)) == NULL) {
+		return NULL;
+	}
+	if (hex_write(fp, buf, len) == -1) {
+		fclose(fp);
+		free(str);
+		return NULL;
+	}
+	fclose(fp);
+	return str;
+}
+
 /*
  * hex_write_wrapped: print the binary buffer data in hex blocks.
  */

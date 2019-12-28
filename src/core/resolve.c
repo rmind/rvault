@@ -6,6 +6,7 @@
  */
 
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <limits.h>
 #include <errno.h>

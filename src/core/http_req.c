@@ -7,13 +7,15 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
+#include <errno.h>
 
 #include <curl/curl.h>
 
-#include "http_req.h"
 #include "rvault.h"
 #include "crypto.h"
+#include "http_req.h"
 #include "utils.h"
 
 static size_t
@@ -21,35 +23,19 @@ write_data(void *buf, size_t size, size_t nmemb, void *ctx)
 {
 	const size_t nbytes = size * nmemb;
 	http_req_t *req = ctx;
-	uint8_t *nbuf;
 
-	if (nbytes == 0) {
-		return 0;
-	}
-	if ((nbuf = malloc(req->len + nbytes)) == NULL) {
+	if (nbytes && fwrite(buf, size, nmemb, req->fp) != nbytes) {
 		return (size_t)-1; // curl will treat is as an error
 	}
-	if (req->buf) {
-		/*
-		 * Copy over the previous buffer.  Erase the previous
-		 * buffer -- it may contain the key.
-		 */
-		memcpy(nbuf, req->buf, req->len);
-		crypto_memzero(req->buf, req->len);
-		free(req->buf);
-	}
-	memcpy(nbuf + req->len, buf, nbytes);
-	req->len += nbytes;
-	req->buf = nbuf;
 	return nbytes;
 }
 
 int
-http_api_request(const char *url, http_req_t *req)
+http_request(const char *url, http_req_t *req)
 {
 	CURL *curl;
+	long verify, status;
 	CURLcode res;
-	long verify;
 	int ret = -1;
 
 	/*
@@ -58,16 +44,38 @@ http_api_request(const char *url, http_req_t *req)
 	if ((curl = curl_easy_init()) == NULL) {
 		return -1;
 	}
-	curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+	//FIXME: curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
 	if ((res = curl_easy_setopt(curl, CURLOPT_URL, url)) != CURLE_OK) {
 		app_log(LOG_ERR, "http without TLS is not allowed");
 		goto out;
 	}
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 
-	curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+	switch (req->type) {
+	case HTTP_GET:
+		curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+		break;
+	case HTTP_POST:
+		if (req->reqbuf) {
+			const size_t bodylen = strlen(req->reqbuf);
+			void *reqbuf = __UNCONST(req->reqbuf);
+
+			req->reqfp = fmemopen(reqbuf, bodylen, "r");
+			curl_easy_setopt(curl, CURLOPT_READDATA, req->reqfp);
+			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, bodylen);
+		}
+		curl_easy_setopt(curl, CURLOPT_POST, 1L);
+		break;
+	default:
+		errno = EINVAL;
+		goto out;
+	}
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 5L);
 
+	req->fp = open_memstream((char **)&req->buf, &req->len);
+	if (req->fp == NULL) {
+		goto out;
+	}
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_data);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)req);
 
@@ -81,6 +89,8 @@ http_api_request(const char *url, http_req_t *req)
 	if (res != CURLE_OK || verify != 0) {
 		goto out;
 	}
+	curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &status);
+	req->status = (int)status;
 	ret = 0;
 out:
 	if (res != CURLE_OK) {
@@ -89,5 +99,23 @@ out:
 		ret = -1;
 	}
 	curl_easy_cleanup(curl);
+	if (req->reqfp) {
+		fclose(req->reqfp);
+		req->reqfp = NULL;
+	}
+	if (req->fp) {
+		fclose(req->fp);
+		req->fp = NULL;
+	}
 	return ret;
+}
+
+void
+http_req_free(http_req_t *req)
+{
+	if (req->buf) {
+		crypto_memzero(req->buf, req->len);
+		free(req->buf);
+	}
+	memset(req, 0, sizeof(http_req_t));
 }

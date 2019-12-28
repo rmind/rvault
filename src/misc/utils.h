@@ -174,6 +174,7 @@ darwin_clock_gettime(struct timespec *tv)
  */
 
 ssize_t		hex_write(FILE *, const void *, size_t);
+char *		hex_write_str(const void *, size_t);
 ssize_t		hex_write_wrapped(FILE *, const void *, size_t);
 void *		hex_read_arbitrary(FILE *, size_t *);
 void *		hex_read_arbitrary_buf(const void *, size_t, size_t *);
