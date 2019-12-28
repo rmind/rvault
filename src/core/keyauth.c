@@ -223,7 +223,7 @@ out:
 		ekey = NULL; // diagnostic
 	}
 	if (key) {
-		crypto_memzero(key, klen);
+		crypto_memzero(key, blen);
 		key = NULL; // diagnostic
 	}
 	crypto_memzero(code, clen);
