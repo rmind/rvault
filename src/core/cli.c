@@ -70,7 +70,7 @@ usage_datapath(void)
 
 //////////////////////////////////////////////////////////////////////////////
 
-static void
+static int
 create_vault(const char *path, const char *server, int argc, char **argv)
 {
 	static const char *opts_s = "c:hn?";
@@ -83,7 +83,7 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 	const char *uid, *cipher = NULL;
 	unsigned flags = 0;
 	char *passphrase;
-	int ch;
+	int ch, ret;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
@@ -124,12 +124,12 @@ usage:			fprintf(stderr,
 	if ((passphrase = getpass("Passphrase: ")) == NULL) {
 		errx(EXIT_FAILURE, "missing passphrase");
 	}
-	if (rvault_init(path, server, passphrase, uid, cipher, flags) == -1) {
-		fprintf(stderr, "vault creation failed -- exiting.\n");
-		exit(EXIT_FAILURE);
-	}
+	ret = rvault_init(path, server, passphrase, uid, cipher, flags);
 	crypto_memzero(passphrase, strlen(passphrase));
-	passphrase = NULL; // diagnostic
+	if (ret == -1) {
+		fprintf(stderr, "vault creation failed -- exiting.\n");
+	}
+	return ret;
 }
 
 rvault_t *
@@ -149,18 +149,17 @@ open_vault(const char *datapath, const char *server)
 	 * Open the vault; erase the passphrase immediately.
 	 */
 	vault = rvault_open(datapath, server, passphrase);
-	if (vault == NULL) {
+	crypto_memzero(passphrase, strlen(passphrase));
+	if (!vault) {
 		fprintf(stderr, "failed to open the vault -- exiting.\n");
 		exit(EXIT_FAILURE);
 	}
-	crypto_memzero(passphrase, strlen(passphrase));
-	passphrase = NULL; // diagnostic
 	return vault;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
-static void
+static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
@@ -174,7 +173,7 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 		vault = open_vault(datapath, server);
 		rvaultfs_run(vault, mountpoint);
 		rvault_close(vault);
-		return;
+		return 0;
 	}
 	fprintf(stderr,
 	    "Usage:\t" APP_NAME " mount PATH\n"
@@ -182,7 +181,7 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 	    "Mount the vault at the given path.\n"
 	    "\n"
 	);
-	exit(EXIT_FAILURE);
+	return -1;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -191,7 +190,7 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 
 typedef enum { FILE_READ, FILE_WRITE } file_op_t;
 
-static void
+static int
 do_file_io(rvault_t *vault, const char *target, file_op_t io)
 {
 	const int flags = (io == FILE_READ) ? O_RDONLY : (O_CREAT | O_RDWR);
@@ -199,6 +198,7 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 	void *buf = NULL;
 	ssize_t nbytes;
 	off_t off = 0;
+	int ret = -1;
 
 	if ((fobj = fileobj_open(vault, target, flags, FOBJ_OMASK)) == NULL) {
 		err(EXIT_FAILURE, "failed to open `%s'", target);
@@ -206,35 +206,45 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 	switch (io) {
 	case FILE_READ:
 		if ((nbytes = fileobj_getsize(fobj)) <= 0) {
-			return; // nothing to do
+			break; // nothing to do
 		}
 		if ((buf = malloc(nbytes)) == NULL) {
-			err(EXIT_FAILURE, "malloc");
+			app_elog(LOG_CRIT, APP_NAME": malloc() failed");
+			goto out;
 		}
 		if (fileobj_pread(fobj, buf, nbytes, 0) == -1) {
-			err(EXIT_FAILURE, "fileobj_pread() failed");
+			app_elog(LOG_CRIT, APP_NAME": fileobj_pread() failed");
+			goto out;
 		}
 		if (fs_write(STDOUT_FILENO, buf, nbytes) != nbytes) {
-			err(EXIT_FAILURE, "fs_write() failed");
+			app_elog(LOG_CRIT, APP_NAME": fs_write() failed");
+			goto out;
 		}
 		break;
 	case FILE_WRITE:
 		if ((buf = malloc(BUF_SIZE)) == NULL) {
-			err(EXIT_FAILURE, "malloc");
+			app_elog(LOG_CRIT, APP_NAME": malloc() failed");
+			goto out;
 		}
 		while ((nbytes = fs_read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
 			if (fileobj_pwrite(fobj, buf, nbytes, off) == -1) {
-				err(EXIT_FAILURE, "fileobj_pwrite() failed");
+				app_elog(LOG_CRIT,
+				    APP_NAME": fileobj_pwrite() failed");
+				goto out;
 			}
 			off += nbytes;
 		}
 		if (nbytes == -1) {
-			err(EXIT_FAILURE, "fs_read() failed");
+			app_elog(LOG_CRIT, "fs_read() failed");
+			goto out;
 		}
 		break;
 	}
+	ret = 0;
+out:
 	fileobj_close(fobj);
 	free(buf);
+	return ret;
 }
 
 static void
@@ -244,7 +254,7 @@ file_list_cmd_iter(void *arg, const char *name, struct dirent *dp)
 	(void)arg; (void)dp;
 }
 
-static void
+static int
 file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	static const char *opts_s = "h?";
@@ -268,7 +278,7 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 			    "The path must represent the namespace in vault.\n"
 			    "\n"
 			);
-			exit(EXIT_FAILURE);
+			return -1;
 		}
 	}
 	argc -= optind;
@@ -278,19 +288,18 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 	path = argc ? argv[0] : "/";
 	rvault_iter_dir(vault, path, NULL, file_list_cmd_iter);
 	rvault_close(vault);
+	return 0;
 }
 
-static void
+static int
 file_read_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
 		const char *target = argv[1];
-		rvault_t *vault;
-
-		vault = open_vault(datapath, server);
-		do_file_io(vault, target, FILE_READ);
+		rvault_t *vault = open_vault(datapath, server);
+		int ret = do_file_io(vault, target, FILE_READ);
 		rvault_close(vault);
-		return;
+		return ret;
 	}
 	fprintf(stderr,
 	    "Usage:\t" APP_NAME " read PATH\n"
@@ -299,20 +308,18 @@ file_read_cmd(const char *datapath, const char *server, int argc, char **argv)
 	    "The path must represent the namespace in vault.\n"
 	    "\n"
 	);
-	exit(EXIT_FAILURE);
+	return -1;
 }
 
-static void
+static int
 file_write_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
 	if (argc > 1) {
 		const char *target = argv[1];
-		rvault_t *vault;
-
-		vault = open_vault(datapath, server);
-		do_file_io(vault, target, FILE_WRITE);
+		rvault_t *vault = open_vault(datapath, server);
+		int ret = do_file_io(vault, target, FILE_WRITE);
 		rvault_close(vault);
-		return;
+		return ret;
 	}
 	fprintf(stderr,
 	    "Usage:\t" APP_NAME " write PATH\n"
@@ -321,13 +328,13 @@ file_write_cmd(const char *datapath, const char *server, int argc, char **argv)
 	    "The path must represent the namespace in vault.\n"
 	    "\n"
 	);
-	exit(EXIT_FAILURE);
+	return -1;
 }
 
 //////////////////////////////////////////////////////////////////////////////
 
 #ifndef SQLITE3_SERIALIZE
-static void
+static int
 sdb_sqlite3_mismatch(const char *d, const char *server, int argc, char **argv)
 {
 	(void)d; (void)server; (void)argc; (void)argv;
@@ -336,13 +343,13 @@ sdb_sqlite3_mismatch(const char *d, const char *server, int argc, char **argv)
 	    "you need sqlite 3.23 or newer,\n"
 	    "compiled with the SQLITE_ENABLE_DESERIALIZE option.\n"
 	);
-	exit(EXIT_FAILURE);
+	return -1;
 }
 #endif
 
-typedef void (*cmd_func_t)(const char *, const char *, int, char **);
+typedef int (*cmd_func_t)(const char *, const char *, int, char **);
 
-static void
+static int
 process_command(const char *datapath, const char *server, int argc, char **argv)
 {
 	static const struct {
@@ -363,13 +370,15 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 
 	for (unsigned i = 0; i < __arraycount(commands); i++) {
 		if (strcmp(commands[i].name, argv[0]) == 0) {
+			int ret;
+
 			/* Run the command. */
-			commands[i].func(datapath, server, argc, argv);
-			return;
+			ret = commands[i].func(datapath, server, argc, argv);
+			return ret == -1 ? EXIT_FAILURE : EXIT_SUCCESS;
 		}
 	}
-	(void)server;
 	usage();
+	return EXIT_FAILURE;
 }
 
 static int
@@ -460,6 +469,5 @@ main(int argc, char **argv)
 	}
 
 	app_setlog(loglevel);
-	process_command(data_path, server, argc, argv);
-	return EXIT_SUCCESS;
+	return process_command(data_path, server, argc, argv);
 }

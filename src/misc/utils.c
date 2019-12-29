@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "utils.h"
 
@@ -217,4 +218,19 @@ app_log(int level, const char *fmt, ...)
 	vfprintf(fp, fmt, ap);
 	va_end(ap);
 	fputs("\n", fp);
+}
+
+void
+app_elog(int level, const char *fmt, ...)
+{
+	const int errno_saved = errno;
+	va_list ap;
+
+	if (level > app_log_level) {
+		return;
+	}
+	va_start(ap, fmt);
+	vfprintf(stderr, fmt, ap);
+	va_end(ap);
+	fprintf(stderr, ": %s\n", strerror(errno_saved));
 }

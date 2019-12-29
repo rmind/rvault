@@ -183,5 +183,6 @@ unsigned	str_tokenize(char *, char **, unsigned);
 
 void		app_setlog(int);
 void		app_log(int, const char *, ...);
+void		app_elog(int, const char *, ...);
 
 #endif

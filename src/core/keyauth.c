@@ -86,6 +86,8 @@ rvault_key_set(rvault_t *vault)
 	size_t klen, blen;
 	http_req_t req;
 
+	memset(&req, 0, sizeof(http_req_t));
+
 	/*
 	 * Prepare the buffers.
 	 */
@@ -97,7 +99,6 @@ rvault_key_set(rvault_t *vault)
 	if ((ekey = malloc(blen)) == NULL) {
 		goto out;
 	}
-	memset(&req, 0, sizeof(http_req_t));
 
 	/*
 	 * Envelope encryption:
@@ -161,6 +162,8 @@ rvault_key_get(rvault_t *vault)
 	ssize_t klen;
 	int ret = -1;
 
+	memset(&req, 0, sizeof(http_req_t));
+
 	/*
 	 * Get the TOTP code.  Trim spaces and other possible separators.
 	 */
@@ -182,7 +185,6 @@ rvault_key_get(rvault_t *vault)
 	/*
 	 * Make an API call to authenticate.
 	 */
-	memset(&req, 0, sizeof(http_req_t));
 	if (http_api_request(vault, &req, "auth", api_auth_json, code) == -1) {
 		goto out;
 	}
@@ -218,15 +220,11 @@ rvault_key_get(rvault_t *vault)
 out:
 	if (ekey) {
 		crypto_memzero(ekey, blen);
-		ekey = NULL; // diagnostic
 	}
 	if (key) {
 		crypto_memzero(key, blen);
-		key = NULL; // diagnostic
 	}
 	crypto_memzero(code, clen);
-	code = NULL; // diagnostic
-
 	http_req_free(&req);
 	return ret;
 }

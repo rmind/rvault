@@ -283,7 +283,7 @@ sdb_usage(void)
 	);
 }
 
-void
+int
 sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 {
 	rvault_t *vault;
@@ -294,7 +294,9 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 	ASSERT(vault != NULL);
 
 	if ((sdb = sdb_open(vault)) == NULL) {
-		err(EXIT_FAILURE, "could not open the database");
+		app_elog(LOG_CRIT, APP_NAME": could not open the database");
+		rvault_close(vault);
+		return -1;
 	}
 	rl_attempted_completion_function = cmd_completion;
 	while ((line = readline("> ")) != NULL) {
@@ -310,4 +312,5 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 	rvault_close(vault);
 
 	(void)argc; (void)argv;
+	return -1;
 }

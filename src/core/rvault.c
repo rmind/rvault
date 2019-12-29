@@ -115,9 +115,8 @@ open_metadata(const char *path, char **normalized_path, int flags)
 		goto err;
 	}
 	if ((fd = open(fpath, flags, RVAULT_META_MODE)) == -1) {
-		app_log(LOG_CRIT, APP_NAME": could not %s `%s': %s",
-		    (flags & O_CREAT) ? "create" : "open", fpath,
-		    strerror(errno));
+		app_elog(LOG_CRIT, APP_NAME": could not %s `%s'",
+		    (flags & O_CREAT) ? "create" : "open", fpath);
 		goto err;
 	}
 	free(fpath);
@@ -149,8 +148,10 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 	}
 	if ((len = fs_file_size(fd)) < (ssize_t)RVAULT_HDR_LEN) {
 		app_log(LOG_CRIT, "rvault: metadata file corrupted");
-		free(*normalized_path);
-		*normalized_path = NULL;
+		if (normalized_path) {
+			free(*normalized_path);
+			*normalized_path = NULL;
+		}
 		close(fd);
 		return NULL;
 	}
@@ -289,8 +290,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 		memcpy(vault.uid, uid, uid_len);
 
 		if (rvault_key_set(&vault) == -1) {
-			app_log(LOG_DEBUG, "%s() failed: %s",
-			    __func__, strerror(errno));
+			app_log(LOG_DEBUG, "%s() failed", __func__);
 			goto err;
 		}
 	}

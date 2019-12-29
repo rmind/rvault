@@ -17,7 +17,6 @@ typedef struct {
 	FILE *		fp;
 
 	const char *	reqbuf;
-	FILE *		reqfp;
 	int		status;
 } http_req_t;
 

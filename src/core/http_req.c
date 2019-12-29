@@ -35,6 +35,7 @@ http_request(const char *url, http_req_t *req)
 {
 	CURL *curl;
 	long verify, status;
+	FILE *reqfp = NULL;
 	CURLcode res;
 	int ret = -1;
 
@@ -60,8 +61,10 @@ http_request(const char *url, http_req_t *req)
 			const size_t bodylen = strlen(req->reqbuf);
 			void *reqbuf = __UNCONST(req->reqbuf);
 
-			req->reqfp = fmemopen(reqbuf, bodylen, "r");
-			curl_easy_setopt(curl, CURLOPT_READDATA, req->reqfp);
+			if ((reqfp = fmemopen(reqbuf, bodylen, "r")) == NULL) {
+				goto out;
+			}
+			curl_easy_setopt(curl, CURLOPT_READDATA, reqfp);
 			curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, bodylen);
 		}
 		curl_easy_setopt(curl, CURLOPT_POST, 1L);
@@ -99,13 +102,12 @@ out:
 		ret = -1;
 	}
 	curl_easy_cleanup(curl);
-	if (req->reqfp) {
-		fclose(req->reqfp);
-		req->reqfp = NULL;
-	}
 	if (req->fp) {
 		fclose(req->fp);
 		req->fp = NULL;
+	}
+	if (reqfp) {
+		fclose(reqfp);
 	}
 	return ret;
 }
