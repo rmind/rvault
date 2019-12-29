@@ -48,11 +48,11 @@ The vault can be operated as a filesystem in userspace.
 .Sh OPTIONS
 The general options are:
 .Bl -tag -width indent
-.It Fl d|--datapath Ar path
+.It Fl d | Fl Fl datapath Ar path
 Base path to the vault data.
-.It Fl h|--help
+.It Fl h | Fl Fl help
 Show the application help text.
-.It Fl l|--log-level Ar level
+.It Fl l | Fl Fl log-level Ar level
 Set the log level:
 .Cm DEBUG ,
 .Cm INFO ,
@@ -61,9 +61,9 @@ Set the log level:
 .Cm CRITICAL .
 .Pp
 The levels are case insensitive.
-.It Fl s, --server Ar url
+.It Fl s , Fl Fl server Ar url
 Authentication server address.
-.It Fl v, --version
+.It Fl v , Fl Fl version
 Print version information and quit.
 .El
 .\" -----
@@ -76,10 +76,10 @@ Available commands are:
 .It Ic create Ar uid
 Create a new vault with the given UID.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
-.It Fl n|--noauth
+.It Fl n | Fl Fl noauth
 No authentication.
 WARNING: Such use case is very significantly less secure.
-.It Fl c|--cipher Ar cipher
+.It Fl c | Fl Fl cipher Ar cipher
 Cipher to be used for encryption.
 .It Fl h
 Show help of this command.
