@@ -94,7 +94,12 @@ endif
 CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
 
+ifeq ($(LIBSCRYPT_KDF),1)
+CFLAGS+=	-DLIBSCRYPT_KDF
+LDFLAGS+=	-lscrypt-kdf
+else
 LDFLAGS+=	-lscrypt
+endif
 LDFLAGS+=	-lssl -lcrypto
 LDFLAGS+=	-lcurl -lreadline
 ifeq ($(SQLITE3_SERIALIZE),1)

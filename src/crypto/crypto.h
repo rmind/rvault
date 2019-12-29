@@ -94,7 +94,7 @@ int		crypto_set_key(crypto_t *, const void *, size_t);
 const void *	crypto_get_key(const crypto_t *, size_t *);
 ssize_t		crypto_get_keylen(const crypto_t *);
 
-bool		crypto_using_ae(const crypto_t *);
+size_t		crypto_get_taglen(const crypto_t *);
 int		crypto_set_tag(crypto_t *, const void *, size_t);
 const void *	crypto_get_tag(crypto_t *, size_t *);
 

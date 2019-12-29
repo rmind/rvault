@@ -115,10 +115,12 @@ storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 
 	/*
 	 * Allocate memory for the full sync.  Ensure the header area,
-	 * including the padding, is fully zeroed for stable HMAC.
+	 * including the padding, is fully zeroed for a stable HMAC/tag.
 	 */
 	enc_len = crypto_get_buflen(vault->crypto, len);
-	max_buf_len = FILEOBJ_HDR_LEN + enc_len + HMAC_SHA3_256_BUFLEN;
+	max_buf_len = FILEOBJ_HDR_LEN + enc_len;
+	tag_len = crypto_get_taglen(vault->crypto);
+	max_buf_len += MAX(HMAC_SHA3_256_BUFLEN, tag_len);
 	if ((hdr = malloc(max_buf_len)) == NULL) {
 		app_log(LOG_ERR, "buffer allocation failed");
 		return -1;
@@ -222,7 +224,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	/*
 	 * Obtain and set the AE tag.
 	 */
-	use_ae = crypto_using_ae(vault->crypto);
+	use_ae = crypto_get_taglen(vault->crypto) != 0;
 	if (use_ae && crypto_set_tag(vault->crypto,
 	    FILEOBJ_HDR_TO_AETAG(hdr), FILEOBJ_AETAG_LEN(hdr)) == -1) {
 		app_log(LOG_ERR, "failed to obtain the AE tag");

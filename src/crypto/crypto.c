@@ -213,12 +213,13 @@ crypto_get_keylen(const crypto_t *crypto)
 }
 
 /*
- * crypto_using_ae: indicate the cipher uses authenticated encryption (AE).
+ * crypto_get_taglen: return the AE tag length; non-zero value indicates
+ * that the cipher uses authenticated encryption (AE).
  */
-bool
-crypto_using_ae(const crypto_t *crypto)
+size_t
+crypto_get_taglen(const crypto_t *crypto)
 {
-	return crypto->tlen != 0;
+	return crypto->tlen;
 }
 
 /*

@@ -49,7 +49,7 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 	nbytes = crypto_encrypt(cf, data, datalen, enc_buf, buflen);
 	assert(nbytes > 0);
 
-	if (crypto_using_ae(cf)) {
+	if (crypto_get_taglen(cf)) {
 		assert(should_use_ae);
 		aetag = crypto_get_tag(cf, &aetaglen);
 		assert(aetag != NULL);

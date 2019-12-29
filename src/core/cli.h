@@ -10,6 +10,6 @@
 
 void		usage_srvurl(bool);
 rvault_t *	open_vault(const char *, const char *);
-void		sdb_cli(const char *, int, char **);
+int		sdb_cli(const char *, int, char **);
 
 #endif
