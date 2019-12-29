@@ -4,7 +4,8 @@
 
 **rvault** is a secure and authenticated store for secrets (passwords,
 keys, certificates) and small documents.  It uses _envelope encryption_
-with one-time password (OTP) authentication.
+with one-time password (OTP) authentication.  The vault can be operated
+as a filesystem in userspace.
 
 It is written in C11 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
@@ -13,7 +14,7 @@ Available on: Linux and MacOS.
 
 Key features and cryptography:
 - Envelope encryption with one-time password (OTP) authentication.
-- Mounting vault as a filesystem in userspace (using FUSE).
+- Mounting vault as a filesystem in userspace using FUSE.
 - Command line interface (CLI) to operate secrets (and auto-complete for keys).
 - scrypt for the key derivation function (KDF); AES 256 or Chacha20 for encryption.
 - Authentication with the server using TOTP (RFC 6238).
