@@ -83,7 +83,7 @@ rvault_key_set(rvault_t *vault)
 	void *key = NULL, *ekey = NULL;
 	char *ekey_hex = NULL;
 	ssize_t nbytes, ret = -1;
-	size_t klen, blen;
+	size_t klen, blen, tlen;
 	http_req_t req;
 
 	memset(&req, 0, sizeof(http_req_t));
@@ -105,8 +105,9 @@ rvault_key_set(rvault_t *vault)
 	 * - Generate a random key.
 	 * - Encrypt it with the derived key.
 	 *
-	 * NOTE: Authenticated encryption (storing the tag or HMAC)
-	 * is not necessary in this context.
+	 * NOTE: Authenticated encryption is already achieved with HMAC
+	 * on the vault header and the application-level authentication,
+	 * so cipher-level AE tag is not strictly necessary.
 	 */
 	if (crypto_getrandbytes(key, klen) == -1) {
 		goto out;
@@ -116,6 +117,20 @@ rvault_key_set(rvault_t *vault)
 	}
 	if ((ekey_hex = hex_write_str(ekey, nbytes)) == NULL) {
 		goto out;
+	}
+	if ((tlen = crypto_get_taglen(crypto)) != 0) {
+		const void *tag = crypto_get_tag(crypto, &tlen);
+		char *tag_hex, *s;
+
+		if ((tag_hex = hex_write_str(tag, tlen)) == NULL) {
+			goto out;
+		}
+		if (asprintf(&s, "%s:%s", ekey_hex, tag_hex) == -1) {
+			free(tag_hex);
+			goto out;
+		}
+		free(tag_hex);
+		ekey_hex = s;
 	}
 
 	/*
@@ -155,8 +170,8 @@ int
 rvault_key_get(rvault_t *vault)
 {
 	crypto_t *crypto = vault->crypto;
-	void *ekey = NULL, *key = NULL;
-	size_t clen = 0, blen;
+	void *ekey = NULL, *key = NULL, *tag = NULL;
+	size_t clen = 0, blen, tlen;
 	char *s, *code;
 	http_req_t req;
 	ssize_t klen;
@@ -194,13 +209,23 @@ rvault_key_get(rvault_t *vault)
 	}
 
 	/*
-	 * Decrypt one layer using the derived key.
+	 * Get the key and the AE tag (if any).
 	 */
-	if ((ekey = hex_read_arbitrary_buf(req.buf, req.len, &blen)) == NULL) {
+	if (rvault_unhex_aedata(req.buf, &ekey, &blen, &tag, &tlen) == -1) {
 		app_log(LOG_CRIT, APP_NAME": the key received from the "
 		    "server is invalid");
 		goto out;
 	}
+	if (tag && crypto_set_tag(crypto, tag, tlen) == -1) {
+		app_log(LOG_CRIT, APP_NAME": invalid AE tag");
+		free(tag);
+		goto out;
+	}
+	free(tag);
+
+	/*
+	 * Decrypt one layer using the derived key.
+	 */
 	if ((key = malloc(blen)) == NULL) {
 		goto out;
 	}

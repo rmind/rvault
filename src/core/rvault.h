@@ -43,6 +43,8 @@ void		rvault_close(rvault_t *);
 
 int		rvault_key_set(rvault_t *);
 int		rvault_key_get(rvault_t *);
+int		rvault_unhex_aedata(const char *, void **, size_t *,
+		    void **, size_t *);
 
 struct dirent;
 typedef void (*dir_iter_t)(void *, const char *, struct dirent *);
