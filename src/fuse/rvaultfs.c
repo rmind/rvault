@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+#include <sys/types.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +22,7 @@
 #include "fileobj.h"
 #include "utils.h"
 
-#define	FUSE_MINIMUM_VERSION	29
+#define	FUSE_MINIMUM_VERSION	26
 
 static rvault_t *
 get_vault_ctx(void)
@@ -37,6 +38,12 @@ rvaultfs_init(struct fuse_conn_info *conn __unused)
 {
 	/* Must return the context. */
 	return get_vault_ctx();
+}
+
+static int
+rvaultfs_statfs(const char *path, struct statvfs *stbuf)
+{
+	return statvfs(path, stbuf) == -1 ? -errno : 0;
 }
 
 static int
@@ -144,6 +151,27 @@ rvaultfs_write(const char *path __unused, const char *buf, size_t len,
 		return -errno;
 	}
 	return ret;
+}
+
+static int
+rvaultfs_flush(const char *path __unused, struct fuse_file_info *fi)
+{
+	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+
+	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
+	ASSERT(fobj != NULL);
+	return fileobj_sync(fobj) == -1 ? -errno : 0;
+}
+
+static int
+rvaultfs_fsync(const char *path __unused, int isdatasync __unused,
+    struct fuse_file_info *fi)
+{
+	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+
+	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
+	ASSERT(fobj != NULL);
+	return fileobj_sync(fobj) == -1 ? -errno : 0;
 }
 
 static int
@@ -274,6 +302,7 @@ rvaultfs_chown(const char *path, uid_t uid, gid_t gid)
 
 static const struct fuse_operations rvaultfs_ops = {
 	.init		= rvaultfs_init,
+	.statfs		= rvaultfs_statfs,
 	.getattr	= rvaultfs_getattr,
 	.readdir	= rvaultfs_readdir,
 	.truncate	= rvaultfs_truncate,
@@ -281,6 +310,8 @@ static const struct fuse_operations rvaultfs_ops = {
 	.open		= rvaultfs_open,
 	.read		= rvaultfs_read,
 	.write		= rvaultfs_write,
+	.flush		= rvaultfs_flush,
+	.fsync		= rvaultfs_fsync,
 	.release	= rvaultfs_release,
 	.unlink		= rvaultfs_unlink,
 	.rename		= rvaultfs_rename,
@@ -294,7 +325,6 @@ int
 rvaultfs_run(rvault_t *vault, const char *mountpoint)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
-	struct fuse_chan *chan;
 	struct fuse *fuse;
 	int ret;
 
@@ -316,6 +346,22 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 #ifdef FUSE_DEBUG
 	fuse_opt_add_arg(&args, "-odebug");
 #endif
+
+#if defined(__NetBSD__)
+	fuse = fuse_new(&args, &rvaultfs_ops, sizeof(rvaultfs_ops), vault);
+	if (fuse == NULL) {
+		return -1;
+	}
+	if (fuse_mount(fuse, mountpoint) == -1) {
+		fuse_destroy(fuse);
+		return -1;
+	}
+	ret = fuse_loop(fuse);
+	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
+	fuse_unmount(fuse);
+#else
+	struct fuse_chan *chan;
+
 	if ((chan = fuse_mount(mountpoint, &args)) == NULL) {
 		return -1;
 	}
@@ -327,6 +373,7 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 	ret = fuse_loop(fuse);
 	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
 	fuse_unmount(mountpoint, chan);
+#endif
 	fuse_destroy(fuse);
 	return ret;
 }

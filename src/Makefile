@@ -49,6 +49,9 @@ endif
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
 endif
+ifeq ($(SYSNAME),NetBSD)
+CFLAGS+=	-D_NETBSD_SOURCE -D_KERNTYPES
+endif
 
 ifeq ($(CC),gcc)
 ifeq ($(SYSNAME),Darwin)
@@ -91,8 +94,12 @@ CFLAGS+=	-I/usr/local/Cellar/openssl@1.1/1.1.1d/include
 LDFLAGS+=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
 endif
 
+ifeq ($(SYSNAME),NetBSD)
+LDFLAGS+=	-lrefuse
+else
 CFLAGS+=	$(shell pkg-config fuse --cflags)
 LDFLAGS+=	$(shell pkg-config fuse --libs)
+endif
 
 ifeq ($(LIBSCRYPT_KDF),1)
 CFLAGS+=	-DLIBSCRYPT_KDF
