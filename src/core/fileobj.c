@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -44,6 +44,7 @@ struct fileobj {
 };
 
 #define	FILEOBJ_INMEM	0x01	// data in-memory
+#define	FILEOBJ_DIRTY	0x02	// data needs to be synced
 
 static int	fileobj_dataload(fileobj_t *);
 
@@ -72,10 +73,6 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 		fileobj_close(fobj);
 		return NULL;
 	}
-	if (fileobj_dataload(fobj) == -1) {
-		fileobj_close(fobj);
-		return NULL;
-	}
 	app_log(LOG_DEBUG, "%s: vnode %p, data size %zu, vpath [%s]",
 	    __func__, fobj, fobj->len, fobj->vpath);
 	return fobj;
@@ -93,7 +90,7 @@ fileobj_dataload(fileobj_t *fobj)
 		return -1;
 	}
 	if (flen == 0) {
-		// XXX
+		fobj->flags |= FILEOBJ_INMEM;
 		return 0;
 	}
 
@@ -107,10 +104,20 @@ fileobj_dataload(fileobj_t *fobj)
 	return 0;
 }
 
-static int
-fileobj_datasync(fileobj_t *fobj)
+/*
+ * fileobj_sync: sync the data to the backing store.
+ */
+int
+fileobj_sync(fileobj_t *fobj)
 {
 	rvault_t *vault = fobj->vault;
+
+	/*
+	 * Check if there is anything to sync.
+	 */
+	if ((fobj->flags & FILEOBJ_DIRTY) == 0) {
+		return 0;
+	}
 
 	/*
 	 * If truncating, then just wipe the whole file.
@@ -127,6 +134,7 @@ fileobj_datasync(fileobj_t *fobj)
 		errno = EIO; // XXX
 		return -1;
 	}
+	fobj->flags &= ~FILEOBJ_DIRTY;
 	return 0;
 }
 
@@ -182,8 +190,14 @@ void
 fileobj_close(fileobj_t *fobj)
 {
 	rvault_t *vault = fobj->vault;
+	unsigned retry = 3;
 
 	app_log(LOG_DEBUG, "%s: vnode %p", __func__, fobj);
+
+	/* Sync any data before closing. */
+	while (retry-- && fileobj_sync(fobj) == -1) {
+		usleep(1); // best effort
+	}
 
 	/* Remove itself from the file list. */
 	LIST_REMOVE(fobj, entry);
@@ -214,9 +228,14 @@ fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 		errno = EINVAL;
 		return -1;
 	}
+	if (fileobj_dataload(fobj) == -1) {
+		errno = EIO;
+		return -1;
+	}
 	if (fobj->buf == NULL || offset >= (off_t)fobj->len) {
 		return 0;
 	}
+
 	nbytes = MIN(fobj->len - offset, len);
 	memcpy(buf, &fobj->buf[offset], nbytes);
 
@@ -239,6 +258,10 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	if (len == 0) {
 		return 0;
 	}
+	if (fileobj_dataload(fobj) == -1) {
+		errno = EIO;
+		return -1;
+	}
 
 	/*
 	 * Expand the memory buffer.
@@ -259,13 +282,9 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 
 	/*
 	 * Write the data to the buffer.
-	 * Sync it to the backing store.
 	 */
 	memcpy(&fobj->buf[offset], buf, len);
-	if (fileobj_datasync(fobj) == -1) {
-		errno = EIO; // XXX
-		return -1;
-	}
+	fobj->flags |= FILEOBJ_DIRTY;
 
 	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
 	    __func__, fobj, (intmax_t)offset, len);
@@ -273,10 +292,14 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 }
 
 size_t
-fileobj_getsize(const fileobj_t *fobj)
+fileobj_getsize(fileobj_t *fobj)
 {
-	ASSERT(fobj->buf || fobj->len == 0);
 	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
+	if (fileobj_dataload(fobj) == -1) {
+		errno = EIO;
+		return -1;
+	}
+	ASSERT(fobj->buf || fobj->len == 0);
 	return fobj->len;
 }
 
@@ -284,6 +307,11 @@ int
 fileobj_setsize(fileobj_t *fobj, size_t len)
 {
 	void *buf;
+
+	if (fileobj_dataload(fobj) == -1) {
+		errno = EIO;
+		return -1;
+	}
 
 	/*
 	 * Note: if new length is zero, then sbuffer_move() will free the
@@ -295,7 +323,7 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	fobj->buf = buf;
 	fobj->len = len;
 
-	if (fileobj_datasync(fobj) == -1) {
+	if (fileobj_sync(fobj) == -1) {
 		return -1;
 	}
 
