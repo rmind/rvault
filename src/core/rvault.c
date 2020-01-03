@@ -467,6 +467,7 @@ rvault_iter_dir(rvault_t *vault, const char *path,
 		const char *vname = dp->d_name;
 		char *name;
 
+		/* "." and ".." are somewhat special cases. */
 		if (strcmp(vname, ".") == 0 || strcmp(vname, "..") == 0) {
 			iterfunc(arg, vname, dp);
 			continue;

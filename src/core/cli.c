@@ -247,9 +247,16 @@ out:
 	return ret;
 }
 
+typedef enum { FILE_SHOWALL = 0x1 } flist_flag_t;
+
 static void
-file_list_cmd_iter(void *arg, const char *name, struct dirent *dp)
+file_list_iter(void *arg, const char *name, struct dirent *dp)
 {
+	const flist_flag_t flags = (flist_flag_t)(uintptr_t)arg;
+
+	if ((flags & FILE_SHOWALL) == 0 && name[0] == '.') {
+		return; // skip the hidden files if "-a"
+	}
 	printf("%s\n", name);
 	(void)arg; (void)dp;
 }
@@ -257,17 +264,23 @@ file_list_cmd_iter(void *arg, const char *name, struct dirent *dp)
 static int
 file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "h?";
+	static const char *opts_s = "ah?";
 	static struct option opts_l[] = {
+		{ "all",	no_argument,		0,	'a'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
 	rvault_t *vault;
 	const char *path;
+	flist_flag_t flags;
 	int ch;
 
+	flags = 0;
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
+		case 'a':
+			flags |= FILE_SHOWALL;
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -276,6 +289,10 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 			    "\n"
 			    "List the vault content.\n"
 			    "The path must represent the namespace in vault.\n"
+			    "\n"
+			    "Options:\n"
+			    "  -a|--all  Show all files and directories, "
+			    "including the dot ones.\n"
 			    "\n"
 			);
 			return -1;
@@ -286,7 +303,7 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 
 	vault = open_vault(datapath, server);
 	path = argc ? argv[0] : "/";
-	rvault_iter_dir(vault, path, NULL, file_list_cmd_iter);
+	rvault_iter_dir(vault, path, (void *)(uintptr_t)flags, file_list_iter);
 	rvault_close(vault);
 	return 0;
 }

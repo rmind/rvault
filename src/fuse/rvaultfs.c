@@ -6,9 +6,11 @@
  */
 
 #include <sys/types.h>
+#include <sys/xattr.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 #include <unistd.h>
 #include <dirent.h>
 #include <errno.h>
@@ -33,6 +35,26 @@ get_vault_ctx(void)
 	return vault;
 }
 
+static ssize_t
+get_vault_path(const char *path, char *buf, size_t len)
+{
+	rvault_t *vault = get_vault_ctx();
+	char *vpath;
+	ssize_t ret;
+
+	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+		return -1;
+	}
+	ret = snprintf(buf, len, "%s", vpath);
+	free(vpath);
+
+	if (ret < 0 || (size_t)ret >= len) {
+		errno = ENAMETOOLONG;
+		return -1;
+	}
+	return ret;
+}
+
 static void *
 rvaultfs_init(struct fuse_conn_info *conn __unused)
 {
@@ -43,7 +65,14 @@ rvaultfs_init(struct fuse_conn_info *conn __unused)
 static int
 rvaultfs_statfs(const char *path, struct statvfs *stbuf)
 {
-	return statvfs(path, stbuf) == -1 ? -errno : 0;
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ret = statvfs(vpath, stbuf);
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
@@ -52,7 +81,7 @@ rvaultfs_getattr(const char *path, struct stat *st)
 	rvault_t *vault = get_vault_ctx();
 	const int ret = fileobj_stat(vault, path, st);
 	app_log(LOG_DEBUG, "%s: path `%s', retval %d", __func__, path, ret);
-	return (ret == -1) ? -errno : 0;
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
@@ -188,71 +217,58 @@ rvaultfs_release(const char *path __unused, struct fuse_file_info *fi)
 static int
 rvaultfs_unlink(const char *path)
 {
-	rvault_t *vault = get_vault_ctx();
-	char *vpath;
+	char vpath[PATH_MAX];
 	int ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
 	ret = unlink(vpath);
-	free(vpath);
-
-	return (ret == -1) ? -errno : 0;
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
 rvaultfs_rename(const char *from, const char *to)
 {
-	rvault_t *vault = get_vault_ctx();
-	char *vpath_from = NULL, *vpath_to = NULL;
-	int ret = -1;
+	char vpath_from[PATH_MAX], vpath_to[PATH_MAX];
+	int ret;
 
 	app_log(LOG_DEBUG, "%s: from `%s' to `%s'", __func__, from, to);
-	if ((vpath_from = rvault_resolve_path(vault, from, NULL)) == NULL) {
-		goto err;
+
+	if (get_vault_path(from, vpath_from, sizeof(vpath_from)) == -1) {
+		return -errno;
 	}
-	if ((vpath_to = rvault_resolve_path(vault, to, NULL)) == NULL) {
-		goto err;
+	if (get_vault_path(to, vpath_to, sizeof(vpath_to)) == -1) {
+		return -errno;
 	}
 	ret = rename(vpath_from, vpath_to);
-err:
-	free(vpath_from);
-	free(vpath_to);
-	return (ret == -1) ? -errno : 0;
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
 rvaultfs_mkdir(const char *path, mode_t mode)
 {
-	rvault_t *vault = get_vault_ctx();
-	char *vpath;
+	char vpath[PATH_MAX];
 	int ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s', mode 0%o", __func__, path, mode);
-	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
 	ret = mkdir(vpath, mode);
-	free(vpath);
-	return (ret == -1) ? -errno : 0;
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
 rvaultfs_rmdir(const char *path)
 {
-	rvault_t *vault = get_vault_ctx();
-	char *vpath;
+	char vpath[PATH_MAX];
 	int ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);
-	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
 	ret = rmdir(vpath);
-	free(vpath);
-	return (ret == -1) ? -errno : 0;
+	return (ret == -1) ? -errno : ret;
 }
 
 struct rvaultfs_readdir_iter_ctx {
@@ -285,19 +301,137 @@ rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
 static int
 rvaultfs_chmod(const char *path, mode_t mode)
 {
-	if (chmod(path, mode) == -1) {
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
-	return 0;
+	ret = chmod(vpath, mode);
+	return (ret == -1) ? -errno : ret;
 }
 
 static int
 rvaultfs_chown(const char *path, uid_t uid, gid_t gid)
 {
-	if (lchown(path, uid, gid) == -1) {
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
-	return 0;
+	ret = chown(vpath, uid, gid);
+	return (ret == -1) ? -errno : ret;
+}
+
+static int
+rvaultfs_utimens(const char *path, const struct timespec ts[2])
+{
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ret = utimensat(-1, path, ts, AT_SYMLINK_NOFOLLOW);
+	return (ret == -1) ? -errno : ret;
+}
+
+static int
+rvaultfs_listxattr(const char *path, char *list, size_t size)
+{
+	char vpath[PATH_MAX];
+	ssize_t ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+#ifdef __APPLE__
+	ret = listxattr(vpath, list, size, XATTR_NOFOLLOW);
+#else
+	ret = listxattr(vpath, list, size);
+#endif
+	return ret == -1 ? -errno : ret;
+}
+
+#ifdef __APPLE__
+
+static int
+rvaultfs_getxattr(const char *path, const char *name, char *value,
+    size_t size, uint32_t pos)
+{
+	char vpath[PATH_MAX];
+	ssize_t ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ret = getxattr(vpath, name, value, size, pos, XATTR_NOFOLLOW);
+	return (ret == -1) ? -errno : ret;
+}
+
+static int
+rvaultfs_setxattr(const char *path, const char *name, const char *val,
+    size_t size, int ops, uint32_t pos)
+{
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ops = (ops & ~XATTR_NOSECURITY) | XATTR_NOFOLLOW;
+	ret = setxattr(vpath, name, val, size, pos, ops);
+	return (ret == -1) ? -errno : ret;
+}
+
+#else
+
+static int
+rvaultfs_getxattr(const char *path, const char *name, char *val,
+    size_t size)
+{
+	char vpath[PATH_MAX];
+	ssize_t ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ret = getxattr(vpath, name, val, size);
+	return (ret == -1) ? -errno : ret;
+}
+
+static int
+rvaultfs_setxattr(const char *path, const char *name, const char *val,
+    size_t size, int flags)
+{
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+	ret = lsetxattr(vpath, name, val, size, flags);
+	return (ret == -1) ? -errno : ret;
+}
+
+#endif
+
+static int
+rvaultfs_removexattr(const char *path, const char *name)
+{
+	char vpath[PATH_MAX];
+	int ret;
+
+	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
+		return -errno;
+	}
+#ifdef __APPLE__
+	ret = removexattr(vpath, name, XATTR_NOFOLLOW);
+#else
+	ret = removexattr(vpath, name);
+#endif
+	return (ret == -1) ? -errno : ret;
 }
 
 static const struct fuse_operations rvaultfs_ops = {
@@ -319,6 +453,12 @@ static const struct fuse_operations rvaultfs_ops = {
 	.rmdir		= rvaultfs_rmdir,
 	.chmod		= rvaultfs_chmod,
 	.chown		= rvaultfs_chown,
+	.utimens	= rvaultfs_utimens,
+
+	.listxattr	= rvaultfs_listxattr,
+	.getxattr	= rvaultfs_getxattr,
+	.setxattr	= rvaultfs_setxattr,
+	.removexattr	= rvaultfs_removexattr,
 };
 
 int
@@ -342,6 +482,11 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 	fuse_opt_add_arg(&args, APP_NAME);
 	fuse_opt_add_arg(&args, "-ofsname="APP_NAME);
 	fuse_opt_add_arg(&args, "-odefault_permissions");
+#ifdef __APPLE__
+	fuse_opt_add_arg(&args, "-oiosize=16777216"); // 16 MB
+	// fuse_opt_add_arg(&args, "-onoubc");
+	// fuse_opt_add_arg(&args, "-oauto_xattr");
+#endif
 	// fuse_opt_add_arg(&args, "-oauto_unmount");
 #ifdef FUSE_DEBUG
 	fuse_opt_add_arg(&args, "-odebug");

@@ -87,6 +87,7 @@ fileobj_dataload(fileobj_t *fobj)
 		return 0;
 	}
 	if ((flen = fs_file_size(fobj->fd)) == -1) {
+		app_elog(LOG_DEBUG, "%s: fs_file_size() failed", __func__);
 		return -1;
 	}
 	if (flen == 0) {
@@ -306,9 +307,10 @@ fileobj_getsize(fileobj_t *fobj)
 int
 fileobj_setsize(fileobj_t *fobj, size_t len)
 {
-	void *buf;
+	void *buf = NULL;
 
 	if (fileobj_dataload(fobj) == -1) {
+		app_elog(LOG_DEBUG, "%s: fileobj_dataload() failed", __func__);
 		errno = EIO;
 		return -1;
 	}
@@ -317,13 +319,15 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	 * Note: if new length is zero, then sbuffer_move() will free the
 	 * old buffer and will return NULL.
 	 */
-	if ((buf = sbuffer_move(fobj->buf, fobj->len, len)) == NULL) {
+	if (len && (buf = sbuffer_move(fobj->buf, fobj->len, len)) == NULL) {
+		app_elog(LOG_DEBUG, "%s: sbuffer_move() failed", __func__);
 		return -1;
 	}
 	fobj->buf = buf;
 	fobj->len = len;
 
 	if (fileobj_sync(fobj) == -1) {
+		app_elog(LOG_DEBUG, "%s: fileobj_sync() failed", __func__);
 		return -1;
 	}
 
