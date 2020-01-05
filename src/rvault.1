@@ -85,9 +85,17 @@ Cipher to be used for encryption.
 Show help of this command.
 .El
 .\" ---
+.It Ic export-key
+Print the metadata and the effective encryption key.
+This command can be used to safely backup the key and relevant metadata
+for recovery purposes.
+Leaking this key would compromise the data, therefore expose it with caution.
+.\" ---
 .It Ic ls Oo Fl h Oc Op path
 List the vault contents.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl a
+Show all files and directories, including the files beginning with dot.
 .It Fl h
 Show help of this command.
 .El

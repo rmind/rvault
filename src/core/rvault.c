@@ -406,11 +406,35 @@ rvault_open(const char *path, const char *server, const char *pwd)
 		    "invalid passphrase?");
 		goto err;
 	}
+	safe_munmap(hdr, file_len, 0);
 
 	return vault;
 err:
+	if (hdr) {
+		safe_munmap(hdr, file_len, 0);
+	}
 	rvault_close(vault);
 	return NULL;
+}
+
+void
+rvault_export_key(rvault_t *vault)
+{
+	rvault_hdr_t *hdr;
+	size_t key_len, file_len;
+	const void *key;
+
+	puts("METADATA:");
+	hdr = open_metadata_mmap(vault->base_path, NULL, &file_len);
+	hex_write_wrapped(stdout, hdr, file_len);
+	puts("");
+
+	puts("KEY:");
+	key = crypto_get_key(vault->crypto, &key_len);
+	hex_write_wrapped(stdout, key, key_len);
+	puts("");
+
+	safe_munmap(hdr, file_len, 0);
 }
 
 static void

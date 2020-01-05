@@ -41,6 +41,7 @@ int		rvault_init(const char *, const char *, const char *,
 rvault_t *	rvault_open(const char *, const char *, const char *);
 void		rvault_close(rvault_t *);
 
+void		rvault_export_key(rvault_t *);
 int		rvault_key_set(rvault_t *);
 int		rvault_key_get(rvault_t *);
 int		rvault_unhex_aedata(const char *, void **, size_t *,

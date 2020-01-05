@@ -372,7 +372,7 @@ rvaultfs_getxattr(const char *path, const char *name, char *value,
 
 static int
 rvaultfs_setxattr(const char *path, const char *name, const char *val,
-    size_t size, int ops, uint32_t pos)
+    size_t size, int ops __unused, uint32_t pos)
 {
 	char vpath[PATH_MAX];
 	int ret;
@@ -380,8 +380,7 @@ rvaultfs_setxattr(const char *path, const char *name, const char *val,
 	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
-	ops = (ops & ~XATTR_NOSECURITY) | XATTR_NOFOLLOW;
-	ret = setxattr(vpath, name, val, size, pos, ops);
+	ret = setxattr(vpath, name, val, size, pos, XATTR_NOFOLLOW);
 	return (ret == -1) ? -errno : ret;
 }
 
