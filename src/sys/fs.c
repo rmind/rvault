@@ -15,11 +15,14 @@
 
 #include <stdlib.h>
 #include <inttypes.h>
+#include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <errno.h>
 
 #include "sys.h"
+#include "utils.h"
 
 ssize_t
 fs_file_size(int fd)
@@ -119,10 +122,21 @@ fs_sync(int fd, const char *path)
 	int ret = 0;
 
 	if (fd != -1 && sys_fs_sync(fd) == -1) {
+		app_elog(LOG_WARNING, "%s() failed", __func__);
 		return -1;
 	}
 	if (path) {
-		if ((fd = open(path, O_RDONLY)) == -1) {
+		char *cpath;
+
+		if ((cpath = strdup(path)) == NULL) {
+			app_elog(LOG_WARNING, "%s() failed", __func__);
+			return -1;
+		}
+		fd = open(dirname(cpath), O_RDONLY);
+		free(cpath);
+
+		if (fd == -1) {
+			app_elog(LOG_WARNING, "%s() failed", __func__);
 			return -1;
 		}
 		ret = sys_fs_sync(fd);

@@ -11,8 +11,10 @@
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <time.h>
 #include <ctype.h>
 #include <fcntl.h>
+#include <libgen.h>
 #include <errno.h>
 
 #include "utils.h"
@@ -171,6 +173,27 @@ hex_read_arbitrary_buf(const void *buf, size_t len, size_t *outlen)
 	rbuf = hex_read_arbitrary(fp, outlen);
 	fclose(fp);
 	return rbuf;
+}
+
+/*
+ * tmpfile_get_name: create a temporary file name for a given file path,
+ * returning a path within the same directory.
+ */
+char *
+tmpfile_get_name(const char *path)
+{
+	char *tpath = NULL, *cpath;
+	ssize_t ret;
+
+	if ((cpath = strdup(path)) == NULL) {
+		return NULL;
+	}
+	ret = asprintf(&tpath, "%s/.%s.%ju.%u",
+	    dirname(cpath), basename(cpath),
+	    (uintmax_t)time(NULL), (unsigned)getpid());
+	free(cpath);
+
+	return ret == -1 ? NULL : tpath;
 }
 
 /*

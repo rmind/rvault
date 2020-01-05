@@ -19,8 +19,26 @@ Key features and cryptography:
 - scrypt for the key derivation function (KDF); AES 256 or Chacha20 for encryption.
 - Authentication with the server using TOTP (RFC 6238).
 
-Small and lightweight code base, easy to audit, has many unit tests,
-ASAN and UBSAN enabled, supports different CPU architectures.
+Lightweight code base, easy to audit, has many unit tests, ASAN and UBSAN
+enabled, supports different CPU architectures.
+
+## Usage
+
+Setup the vault and create the passphrase:
+```shell
+export RVAULT_SERVER="https://rvault.noxt.eu"
+export RVAULT_PATH="/home/alice/vault"
+mkdir "$RVAULT_PATH"
+rvault create cba768f9-0efe-4b2c-879d-0925f52bdfd3
+```
+
+Scan the QR code, e.g. Google Authenthicator.  To mount the vault:
+```shell
+mkdir /home/alice/documents
+rvault mount /home/alice/documents
+```
+
+Type `rvault -h` or see the **rvault(1)** manual page for more details.
 
 ## FAQ
 
