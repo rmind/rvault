@@ -44,6 +44,7 @@ usage(void)
 	    "\n"
 	    "Commands:\n"
 	    "  create           Create and initialize a new vault\n"
+	    "  export-key       Print the metadata and key for backup/recovery\n"
 	    "  ls               List the vault contents\n"
 	    "  mount            Mount the encrypted vault as a file system\n"
 	    "  sdb              CLI to operate secrets/passwords\n"
@@ -182,6 +183,36 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 	    "\n"
 	);
 	return -1;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+
+static int
+export_key(const char *datapath, const char *server,
+    int argc __unused, char **argv __unused)
+{
+	rvault_t *vault;
+
+	printf("WARNING: This command is about to expose the "
+	    "effective encryption key!\n"
+	    "Back it up safely for recovery; "
+	    "leaking it would compromise the data.\n\n");
+
+	for (;;) {
+		int ch;
+
+		puts("Type 'y' to continue or 'n' to exit:");
+		ch = getchar();
+		if (ch == 'y')
+			break;
+		if (ch == 'n')
+			return 0;
+	}
+
+	vault = open_vault(datapath, server);
+	rvault_export_key(vault);
+	rvault_close(vault);
+	return 0;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -374,6 +405,7 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 		cmd_func_t	func;
 	} commands[] = {
 		{ "create",	create_vault		},
+		{ "export-key",	export_key		},
 		{ "ls",		file_list_cmd,		},
 #ifdef SQLITE3_SERIALIZE
 		{ "sdb",	sdb_cli,		},

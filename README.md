@@ -48,11 +48,11 @@ be able to decrypt the data without obtaining your data and passphrase.
 
 The attacker, however, could destroy the keys stored on the server-side.
 Hence it is recommended to make a backup of the effective encryption key
-and store it safely, e.g. print it on a paper and lock it in a safe.
+and store it safely, e.g. print it on paper and lock it in a safe.
 
 #### What if I lost my authentication device?
 
-A new authentication device can be set up in place, once user is verified
+A new authentication device can be set up instead, once the user is verified
 using other reliable means (e.g. physical identification).
 
 #### What if I would forget my passphrase?
