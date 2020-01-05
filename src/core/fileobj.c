@@ -112,6 +112,8 @@ int
 fileobj_sync(fileobj_t *fobj)
 {
 	rvault_t *vault = fobj->vault;
+	char *fpath;
+	int fd, e;
 
 	/*
 	 * Check if there is anything to sync.
@@ -129,14 +131,51 @@ fileobj_sync(fileobj_t *fobj)
 	}
 
 	/*
-	 * Sync back the encrypted store.
+	 * Create a temporary file.
 	 */
-	if (storage_write_data(vault, fobj->fd, fobj->buf, fobj->len) == -1) {
-		errno = EIO; // XXX
+	if ((fpath = tmpfile_get_name(fobj->vpath)) == NULL) {
 		return -1;
 	}
+	if ((fd = open(fpath, O_CREAT | O_EXCL | O_RDWR, FOBJ_OMASK)) == -1) {
+		app_elog(LOG_ERR, "%s: open() at `%s' failed", __func__, fpath);
+		free(fpath);
+		return -1;
+	}
+
+	/*
+	 * Sync back the encrypted store.
+	 *
+	 * Note: must sync the directory too.
+	 */
+	if (storage_write_data(vault, fd, fobj->buf, fobj->len) == -1) {
+		app_elog(LOG_DEBUG, "%s: storage_write_data() failed", __func__);
+		errno = EIO;
+		goto err;
+	}
+	if (rename(fpath, fobj->vpath) == -1) {
+		app_elog(LOG_ERR, "%s: rename() failed", __func__);
+		goto err;
+	}
+	fs_sync(fd, fobj->vpath);
+	free(fpath);
+
+	/*
+	 * Update the file descriptor; mark the object as no longer dirty.
+	 */
 	fobj->flags &= ~FILEOBJ_DIRTY;
+	close(fobj->fd);
+	fobj->fd = fd;
+
 	return 0;
+err:
+	e = errno;
+	if (fpath) {
+		unlink(fpath);
+		free(fpath);
+	}
+	close(fd);
+	errno = e;
+	return -1;
 }
 
 int

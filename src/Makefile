@@ -161,6 +161,7 @@ LUA_OBJS+=	crypto/crypto.o
 LUA_OBJS+=	crypto/kdf.o
 LUA_OBJS+=	crypto/openssl.o
 LUA_OBJS+=	sys/fs.o
+LUA_OBJS+=	misc/utils.o
 LUA_OBJS+=	lua/crypto_lua.o
 
 ifeq ($(MAKECMDGOALS),lib)

@@ -81,9 +81,10 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 		{ NULL,		0,			NULL,	0	}
 	};
 	const char *uid, *cipher = NULL;
+	char *passphrase0, *passphrase;
 	unsigned flags = 0;
-	char *passphrase;
 	int ch, ret;
+	bool match;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
@@ -121,9 +122,16 @@ usage:			fprintf(stderr,
 		puts("WARNING: You chose no authentication -- "
 		    "it is much less secure!");
 	}
-	if ((passphrase = getpass("Passphrase: ")) == NULL) {
-		errx(EXIT_FAILURE, "missing passphrase");
+
+	passphrase0 = strdup(getpass("New passphrase: "));
+	passphrase = getpass("Repeat passphrase: ");
+	match = strcmp(passphrase0, passphrase) == 0;
+	crypto_memzero(passphrase0, strlen(passphrase0));
+	free(passphrase0);
+	if (!match) {
+		errx(EXIT_FAILURE, "passphrases do not match");
 	}
+
 	ret = rvault_init(path, server, passphrase, uid, cipher, flags);
 	crypto_memzero(passphrase, strlen(passphrase));
 	if (ret == -1) {
