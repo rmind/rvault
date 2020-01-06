@@ -19,8 +19,8 @@ Key features and cryptography:
 - scrypt for the key derivation function (KDF); AES 256 or Chacha20 for encryption.
 - Authentication with the server using TOTP (RFC 6238).
 
-Lightweight code base, easy to audit, has many unit tests, ASAN and UBSAN
-enabled, supports different CPU architectures.
+Lightweight code base, easy to audit, minimum dependencies, has many unit
+tests, ASAN and UBSAN enabled, supports different CPU architectures.
 
 ## Usage
 
@@ -98,3 +98,4 @@ simplicity.
 To build the packages:
 * RPM (tested on RHEL/CentOS 8): `cd pkg && make rpm`
 * DEB (tested on Debian 11): `cd pkg && make deb`
+* MacOS pkg (tested on Catalina): `cd pkg && make osx-pkg`
