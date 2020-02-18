@@ -274,7 +274,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	memcpy(hdr->uid, uid, uid_len);
 
 	/*
-	 * Register with the remote and post the double-encrypted key.
+	 * Register with the remote and post the envelope-encrypted key.
 	 */
 	if ((flags & RVAULT_FLAG_NOAUTH) == 0) {
 		rvault_t vault; // XXX dummy

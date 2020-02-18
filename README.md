@@ -32,7 +32,7 @@ mkdir "$RVAULT_PATH"
 rvault create cba768f9-0efe-4b2c-879d-0925f52bdfd3
 ```
 
-Scan the QR code, e.g. Google Authenthicator.  To mount the vault:
+Scan the QR code, e.g. using the Google Authenthicator.  To mount the vault:
 ```shell
 mkdir /home/alice/documents
 rvault mount /home/alice/documents
@@ -44,29 +44,30 @@ Type `rvault -h` or see the **rvault(1)** manual page for more details.
 
 #### Would my data be stored or processed remotely?
 
-No, all data is stored and managed locally.  However, your double-encrypted
-key is sent and stored on a remote server.  Because of envelope encryption,
+No, all data is stored and managed locally.  However, your envelope-encrypted
+key is sent and stored on a remote server.  Because of the envelope encryption,
 your real encryption key is opaque to the server.
 
 #### Can I access my data without Internet connectivity?
 
 You need to authenticate with a remote server in order to access your data,
-therefore you need connectivity during that moment.  Once authenticated,
-you can work offline.
+therefore you need connectivity for that moment.  You can work offline once
+authenticated.
 
-#### What if my data and passphrase get stolen?
+#### What if my encrypted data and passphrase would get stolen?
 
 It would still be insufficient to decrypt your data, unless the attacker
 actively hacks into your device and reads the key that is resident in-memory.
+However, such attack is much more sophisticated.
 
 #### What if the remote server is hacked?
 
-An attacker may retrieve the double-encrypted key, but it would still not
-be able to decrypt the data without obtaining your data and passphrase.
+An attacker may retrieve the envelope-encrypted key, but it would still not
+be possible to decrypt the data without obtaining your data and passphrase.
 
 The attacker, however, could destroy the keys stored on the server-side.
 Hence it is recommended to make a backup of the effective encryption key
-and store it safely, e.g. print it on paper and lock it in a safe.
+and store it safely, e.g. print it on paper and lock it in a physical safe.
 
 #### What if I lost my authentication device?
 
@@ -79,7 +80,7 @@ It would be impossible to decrypt the data.
 
 ## Caveats
 
-rvault is not designed to be efficient with large files or large quantities
+**rvault** is not designed to be efficient with large files or large quantities
 of data.  The files are generally expected to fit in physical memory.  The
 application sacrifices performance in favour of security, data integrity and
 simplicity.
