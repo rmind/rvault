@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <time.h>
 #include <errno.h>
 
 #include "rvault.h"
@@ -32,19 +33,27 @@ struct fileobj {
 	unsigned	flags;
 	int		fd;
 
+	/* Resolved vault path and its length. */
 	char *		vpath;
 	size_t		pathlen;
 
-	/* In-memory buffer and length. */
+	/* In-memory buffer, allocation size and data length. */
 	unsigned char *	buf;
+	size_t		buf_size;
 	size_t		len;
+
+	/* Last sync time. */
+	time_t		last_stime;
 
 	/* Vault file-list entry. */
 	LIST_ENTRY(fileobj) entry;
 };
 
-#define	FILEOBJ_INMEM	0x01	// data in-memory
-#define	FILEOBJ_DIRTY	0x02	// data needs to be synced
+#define	FOBJ_INMEM		0x01	// data in-memory
+#define	FOBJ_DIRTY		0x02	// data needs to be synced
+#define	FOBJ_NEED_FSYNC		0x04	// need a full fsync()
+
+#define	FOBJ_MIN_SYNC_TIME	3	// in seconds
 
 static int	fileobj_dataload(fileobj_t *);
 
@@ -73,7 +82,7 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 		fileobj_close(fobj);
 		return NULL;
 	}
-	app_log(LOG_DEBUG, "%s: vnode %p, data size %zu, vpath [%s]",
+	app_log(LOG_DEBUG, "%s: vnode %p, data length %zu, vpath [%s]",
 	    __func__, fobj, fobj->len, fobj->vpath);
 	return fobj;
 }
@@ -83,7 +92,7 @@ fileobj_dataload(fileobj_t *fobj)
 {
 	ssize_t flen;
 
-	if (fobj->flags & FILEOBJ_INMEM) {
+	if (fobj->flags & FOBJ_INMEM) {
 		return 0;
 	}
 	if ((flen = fs_file_size(fobj->fd)) == -1) {
@@ -91,7 +100,7 @@ fileobj_dataload(fileobj_t *fobj)
 		return -1;
 	}
 	if (flen == 0) {
-		fobj->flags |= FILEOBJ_INMEM;
+		fobj->flags |= FOBJ_INMEM;
 		return 0;
 	}
 
@@ -101,7 +110,8 @@ fileobj_dataload(fileobj_t *fobj)
 	 */
 	fobj->buf = storage_read_data(fobj->vault, fobj->fd, flen, &fobj->len);
 	ASSERT(fobj->buf || fobj->len == 0);
-	fobj->flags |= FILEOBJ_INMEM;
+	fobj->buf_size = fobj->len;
+	fobj->flags |= FOBJ_INMEM;
 	return 0;
 }
 
@@ -109,7 +119,7 @@ fileobj_dataload(fileobj_t *fobj)
  * fileobj_sync: sync the data to the backing store.
  */
 int
-fileobj_sync(fileobj_t *fobj)
+fileobj_sync(fileobj_t *fobj, int stype)
 {
 	rvault_t *vault = fobj->vault;
 	char *fpath;
@@ -118,8 +128,8 @@ fileobj_sync(fileobj_t *fobj)
 	/*
 	 * Check if there is anything to sync.
 	 */
-	if ((fobj->flags & FILEOBJ_DIRTY) == 0) {
-		return 0;
+	if ((fobj->flags & FOBJ_DIRTY) == 0) {
+		goto out;
 	}
 
 	/*
@@ -127,7 +137,10 @@ fileobj_sync(fileobj_t *fobj)
 	 */
 	if (!fobj->buf) {
 		ASSERT(fobj->len == 0);
-		return ftruncate(fobj->fd, 0);
+		if (ftruncate(fobj->fd, 0) == -1) {
+			return -1;
+		}
+		goto out;
 	}
 
 	/*
@@ -156,16 +169,22 @@ fileobj_sync(fileobj_t *fobj)
 		app_elog(LOG_ERR, "%s: rename() failed", __func__);
 		goto err;
 	}
-	fs_sync(fd, fobj->vpath);
 	free(fpath);
 
 	/*
 	 * Update the file descriptor; mark the object as no longer dirty.
 	 */
-	fobj->flags &= ~FILEOBJ_DIRTY;
+	fobj->flags &= ~FOBJ_DIRTY;
 	close(fobj->fd);
 	fobj->fd = fd;
 
+	app_log(LOG_DEBUG, "%s: vnode %p write-back complete", __func__, fobj);
+out:
+	if (stype == FOBJ_FULLSYNC && (fobj->flags & FOBJ_NEED_FSYNC) != 0) {
+		fs_sync(fobj->fd, fobj->vpath);
+		fobj->flags &= ~FOBJ_NEED_FSYNC;
+		app_log(LOG_DEBUG, "%s: vnode %p full-sync", __func__, fobj);
+	}
 	return 0;
 err:
 	e = errno;
@@ -235,7 +254,7 @@ fileobj_close(fileobj_t *fobj)
 	app_log(LOG_DEBUG, "%s: vnode %p", __func__, fobj);
 
 	/* Sync any data before closing. */
-	while (retry-- && fileobj_sync(fobj) == -1) {
+	while (fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 && retry--) {
 		usleep(1); // best effort
 	}
 
@@ -251,7 +270,8 @@ fileobj_close(fileobj_t *fobj)
 	}
 	if (fobj->buf) {
 		ASSERT(fobj->len > 0);
-		sbuffer_free(fobj->buf, fobj->len);
+		ASSERT(fobj->buf_size >= fobj->len);
+		sbuffer_free(fobj->buf, fobj->buf_size);
 	}
 	if (fobj->fd > 0) {
 		close(fobj->fd);
@@ -288,9 +308,10 @@ ssize_t
 fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 {
 	uint64_t endoff;
+	time_t now;
 
 	endoff = offset + len - 1;
-	if (offset < 0 || endoff < (uint64_t)offset) {
+	if (offset < 0 || endoff < (uint64_t)offset || endoff > SIZE_MAX) {
 		/* Overflow. */
 		errno = EINVAL;
 		return -1;
@@ -308,14 +329,34 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	 */
 	if (endoff >= fobj->len) {
 		const size_t nlen = endoff + 1;
-		void *nbuf;
 
-		nbuf = sbuffer_move(fobj->buf, fobj->len, nlen);
-		if (nbuf == 0) {
-			errno = ENOMEM;
-			return -1;
+		/*
+		 * If we have enough space since the previous expansion,
+		 * then merely bump the data length.
+		 */
+		if (endoff >= fobj->buf_size) {
+			size_t buf_size;
+			void *nbuf;
+
+			/*
+			 * Grow exponentially.  Check for overflow, though.
+			 */
+			if ((nlen << 1) < nlen) {
+				buf_size = nlen;
+			} else {
+				buf_size = nlen << 1;
+			}
+			app_log(LOG_DEBUG, "%s: vnode %p, grow to [%zu]",
+			    __func__, fobj, buf_size);
+
+			nbuf = sbuffer_move(fobj->buf, fobj->len, buf_size);
+			if (nbuf == NULL) {
+				errno = ENOMEM;
+				return -1;
+			}
+			fobj->buf = nbuf;
+			fobj->buf_size = buf_size;
 		}
-		fobj->buf = nbuf;
 		fobj->len = nlen;
 	}
 	ASSERT(fobj->buf != NULL);
@@ -324,10 +365,21 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	 * Write the data to the buffer.
 	 */
 	memcpy(&fobj->buf[offset], buf, len);
-	fobj->flags |= FILEOBJ_DIRTY;
+	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 
 	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
 	    __func__, fobj, (intmax_t)offset, len);
+
+	/*
+	 * Sync if more than N seconds passed since the last write.
+	 */
+	now = time(NULL);
+	if ((now - fobj->last_stime) > FOBJ_MIN_SYNC_TIME) {
+		if (fileobj_sync(fobj, FOBJ_WRITEBACK) == 0) {
+			fobj->last_stime = now;
+		}
+	}
+
 	return (size_t)len;
 }
 
@@ -364,8 +416,9 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	}
 	fobj->buf = buf;
 	fobj->len = len;
+	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 
-	if (fileobj_sync(fobj) == -1) {
+	if (fileobj_sync(fobj, FOBJ_WRITEBACK) == -1) {
 		app_elog(LOG_DEBUG, "%s: fileobj_sync() failed", __func__);
 		return -1;
 	}
