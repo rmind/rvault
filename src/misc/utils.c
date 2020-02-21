@@ -5,6 +5,7 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+#include <sys/file.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -16,7 +17,9 @@
 #include <fcntl.h>
 #include <libgen.h>
 #include <errno.h>
+#include <err.h>
 
+#include "sys.h"
 #include "utils.h"
 
 #define	BUF_SIZE		(1024)
@@ -173,6 +176,71 @@ hex_read_arbitrary_buf(const void *buf, size_t len, size_t *outlen)
 	rbuf = hex_read_arbitrary(fp, outlen);
 	fclose(fp);
 	return rbuf;
+}
+
+/*
+ * PID file related helpers.
+ */
+
+static char *		pid_file = NULL;
+static int		pid_file_fd = -1;
+
+static void
+cleanup_pid(void)
+{
+	if (pid_file) {
+		close(pid_file_fd);
+		unlink(pid_file);
+		free(pid_file);
+	}
+}
+
+void
+setup_pid(const char *fmt, ...)
+{
+	va_list ap;
+	ssize_t ret;
+	int fd;
+
+	va_start(ap, fmt);
+	ret = vasprintf(&pid_file, fmt, ap);
+	va_end(ap);
+	if (ret == -1) {
+		err(EXIT_FAILURE, "malloc");
+	}
+
+	if ((fd = open(pid_file, O_CREAT | O_RDWR, 0644)) == -1) {
+		err(EXIT_FAILURE, "failed to create pid file `%s'", pid_file);
+	}
+	ret = flock(fd, LOCK_EX | LOCK_NB);
+	if (ret == -1 && errno != EWOULDBLOCK) {
+		err(EXIT_FAILURE, "flock");
+	}
+	if (ret) {
+		char pid_buf[64];
+
+		fs_read(fd, pid_buf, sizeof(pid_buf));
+		pid_buf[sizeof(pid_buf) - 1] = '\0';
+		close(fd);
+
+		errx(EXIT_FAILURE,
+		    "another process is already running with the vault "
+		    "mounted.\nCheck the process ID (PID): %s", pid_buf
+		);
+	}
+	if (ftruncate(fd, 0) == -1) {
+		err(EXIT_FAILURE, "ftruncate");
+	}
+	dprintf(fd, "%d\n", getpid());
+	fsync(fd);
+
+	/*
+	 * Hold the file descriptor and the lock until exit.
+	 */
+	if (atexit(cleanup_pid) == -1) {
+		err(EXIT_FAILURE, "atexit");
+	}
+	pid_file_fd = fd;
 }
 
 /*

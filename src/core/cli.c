@@ -524,7 +524,8 @@ main(int argc, char **argv)
 	if (!data_path) {
 		usage_datapath();
 	}
-
+	setup_pid("%s/"APP_NAME".pid", data_path);
 	app_setlog(loglevel);
+
 	return process_command(data_path, server, argc, argv);
 }

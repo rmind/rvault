@@ -179,6 +179,7 @@ ssize_t		hex_write_wrapped(FILE *, const void *, size_t);
 void *		hex_read_arbitrary(FILE *, size_t *);
 void *		hex_read_arbitrary_buf(const void *, size_t, size_t *);
 
+void		setup_pid(const char *, ...);
 char *		tmpfile_get_name(const char *);
 unsigned	str_tokenize(char *, char **, unsigned);
 
