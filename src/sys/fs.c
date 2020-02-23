@@ -32,6 +32,11 @@ fs_file_size(int fd)
 	if (fstat(fd, &st) == -1) {
 		return -1;
 	}
+	if (st.st_size > SSIZE_MAX) {
+		errno = EOVERFLOW;
+		return -1;
+	}
+	ASSERT(st.st_size >= 0);
 	return st.st_size;
 }
 

@@ -189,7 +189,7 @@ rvaultfs_flush(const char *path __unused, struct fuse_file_info *fi)
 
 	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
 	ASSERT(fobj != NULL);
-	return fileobj_sync(fobj) == -1 ? -errno : 0;
+	return fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 ? -errno : 0;
 }
 
 static int
@@ -200,7 +200,7 @@ rvaultfs_fsync(const char *path __unused, int isdatasync __unused,
 
 	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
 	ASSERT(fobj != NULL);
-	return fileobj_sync(fobj) == -1 ? -errno : 0;
+	return fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 ? -errno : 0;
 }
 
 static int
