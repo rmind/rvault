@@ -31,6 +31,7 @@ usage(void)
 	    "Usage:\t" APP_NAME " [OPTIONS] COMMAND\n"
 	    "\n"
 	    "Options:\n"
+	    "  -c, --ciphers          List the available ciphers\n"
 	    "  -d, --datapath PATH    Base path to the vault data\n"
 	    "  -h, --help             Show this help text\n"
 	    "  -l, --log-level LEVEL  Set log level "
@@ -98,18 +99,7 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 		case 'h':
 		case '?':
 		default:
-usage:			fprintf(stderr,
-			    "Usage:\t" APP_NAME " create UID\n"
-			    "\n"
-			    "Create a new vault with the given UID.\n"
-			    "\n"
-			    "Options:\n"
-			    "  -c|--cipher CIPHER  Cipher\n"
-			    "  -n|--noauth         No authentication "
-			    "(WARNING: this is much less secure)"
-			    "\n"
-			);
-			exit(EXIT_FAILURE);
+			goto usage;
 		}
 	}
 	argc -= optind;
@@ -139,6 +129,19 @@ usage:			fprintf(stderr,
 		fprintf(stderr, "vault creation failed -- exiting.\n");
 	}
 	return ret;
+usage:
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " create UID\n"
+	    "\n"
+	    "Create a new vault with the given UID.\n"
+	    "\n"
+	    "Options:\n"
+	    "  -c|--cipher CIPHER  Cipher\n"
+	    "  -n|--noauth         No authentication "
+	    "(WARNING: this is much less secure)"
+	    "\n"
+	);
+	return -1;
 }
 
 rvault_t *
@@ -171,23 +174,47 @@ open_vault(const char *datapath, const char *server)
 static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
-	if (argc > 1) {
-		const char *mountpoint = argv[1];
-		rvault_t *vault;
-#if 0
-		if (!fg && daemon(0, 0) == -1) {
-			err(EXIT_FAILURE, "daemon");
+	static const char *opts_s = "fh?";
+	static struct option opts_l[] = {
+		{ "foreground",	no_argument,		0,	'f'	},
+		{ "help",	no_argument,		0,	'h'	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	rvault_t *vault;
+	const char *mountpoint;
+	bool fg = false;
+	int ch;
+
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+		switch (ch) {
+		case 'f':
+			fg = true;
+			break;
+		case 'h':
+		case '?':
+		default:
+			goto usage;
 		}
-#endif
-		vault = open_vault(datapath, server);
-		rvaultfs_run(vault, mountpoint);
-		rvault_close(vault);
-		return 0;
 	}
+	argc -= optind;
+	argv += optind;
+	if (!argc) {
+		goto usage;
+	}
+	mountpoint = argv[0];
+
+	vault = open_vault(datapath, server);
+	rvaultfs_run(vault, mountpoint, fg);
+	rvault_close(vault);
+	return 0;
+usage:
 	fprintf(stderr,
 	    "Usage:\t" APP_NAME " mount PATH\n"
 	    "\n"
 	    "Mount the vault at the given path.\n"
+	    "\n"
+	    "Options:\n"
+	    "  -f|--foreground  Run in the foreground (do not daemonize).\n"
 	    "\n"
 	);
 	return -1;
@@ -323,18 +350,7 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 		case 'h':
 		case '?':
 		default:
-			fprintf(stderr,
-			    "Usage:\t" APP_NAME " ls [PATH]\n"
-			    "\n"
-			    "List the vault content.\n"
-			    "The path must represent the namespace in vault.\n"
-			    "\n"
-			    "Options:\n"
-			    "  -a|--all  Show all files and directories, "
-			    "including the dot ones.\n"
-			    "\n"
-			);
-			return -1;
+			goto usage;
 		}
 	}
 	argc -= optind;
@@ -345,6 +361,19 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 	rvault_iter_dir(vault, path, (void *)(uintptr_t)flags, file_list_iter);
 	rvault_close(vault);
 	return 0;
+usage:
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " ls [PATH]\n"
+	    "\n"
+	    "List the vault content.\n"
+	    "The path must represent the namespace in vault.\n"
+	    "\n"
+	    "Options:\n"
+	    "  -a|--all  Show all files and directories, "
+	    "including the dot ones.\n"
+	    "\n"
+	);
+	return -1;
 }
 
 static int
@@ -460,11 +489,27 @@ get_log_level(const char *level_name)
 	return -1;
 }
 
+static void
+list_ciphers(void)
+{
+	const char **ciphers;
+	unsigned nitems = 0;
+
+	ciphers = crypto_cipher_list(&nitems);
+	for (unsigned i = 0; i < nitems; i++) {
+		const char *cipher = ciphers[i];
+		printf("%s%s\n", cipher,
+		    (crypto_cipher_id(cipher) == CRYPTO_CIPHER_PRIMARY) ?
+		    " (default)" : "");
+	}
+}
+
 int
 main(int argc, char **argv)
 {
-	static const char *opts_s = "d:hl:s:v?";
+	static const char *opts_s = "cd:hl:s:v?";
 	static struct option opts_l[] = {
+		{ "ciphers",	no_argument,		0,	'c'	},
 		{ "datapath",	required_argument,	0,	'd'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ "log-level",	required_argument,	0,	'l'	},
@@ -488,6 +533,9 @@ main(int argc, char **argv)
 			break;
 		}
 		switch (ch) {
+		case 'c':
+			list_ciphers();
+			exit(EXIT_SUCCESS);
 		case 'd':
 			data_path = optarg;
 			break;

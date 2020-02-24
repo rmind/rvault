@@ -8,6 +8,6 @@
 #ifndef	_RVAULTFS_H_
 #define	_RVAULTFS_H_
 
-int	rvaultfs_run(rvault_t *, const char *);
+int	rvaultfs_run(rvault_t *, const char *, bool);
 
 #endif
