@@ -21,8 +21,8 @@ typedef enum {
 	CHACHA20_POLY1305	= 4,
 } crypto_cipher_t;
 
-#define	CRYPTO_CIPHER_PRIMARY	AES_256_CBC
-#define	CRYPTO_CIPHER_SECONDARY	CHACHA20
+#define	CRYPTO_CIPHER_PRIMARY	AES_256_GCM
+#define	CRYPTO_CIPHER_SECONDARY	CHACHA20_POLY1305
 
 typedef struct crypto crypto_t;
 
