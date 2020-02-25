@@ -14,13 +14,22 @@ Available on: Linux and MacOS.
 
 Key features and cryptography:
 - Envelope encryption with one-time password (OTP) authentication.
-- Mounting vault as a filesystem in userspace using FUSE.
+- Mounting vault as a filesystem in userspace using
+[FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace).
 - Command line interface (CLI) to operate secrets (and auto-complete for keys).
-- scrypt for the key derivation function (KDF); AES 256 or Chacha20 for encryption.
-- Authentication with the server using TOTP (RFC 6238).
+- [scrypt](https://en.wikipedia.org/wiki/Scrypt)
+[RFC 7914](https://tools.ietf.org/html/rfc7914)
+for the key derivation function
+([KDF](https://en.wikipedia.org/wiki/Key_derivation_function));
+[AES 256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) or
+[Chacha20](https://en.wikipedia.org/wiki/ChaCha20) for encryption.
+- Authentication with the server using
+[TOTP](https://en.wikipedia.org/wiki/Time-based_One-time_Password_algorithm)
+([RFC 6238](https://tools.ietf.org/html/rfc6238)).
 
-Lightweight code base, easy to audit, minimum dependencies, has many unit
-tests, ASAN and UBSAN enabled, supports different CPU architectures.
+Lightweight code base, easy to audit, minimum dependencies, has many unit tests,
+[ASan](https://en.wikipedia.org/wiki/AddressSanitizer) and
+UBSan enabled, supports different CPU architectures.
 
 ## Usage
 
@@ -32,7 +41,10 @@ mkdir "$RVAULT_PATH"
 rvault create cba768f9-0efe-4b2c-879d-0925f52bdfd3
 ```
 
-Scan the QR code, e.g. using the Google Authenthicator.  To mount the vault:
+Scan the QR code, e.g. using the
+[Google Authenticator](https://play.google.com/store/apps/details?id=com.google.android.apps.authenticator2) or
+[Microsoft Authenticator](https://play.google.com/store/apps/details?id=com.azure.authenticator).
+To mount the vault:
 ```shell
 mkdir /home/alice/documents
 rvault mount /home/alice/documents
@@ -76,7 +88,7 @@ using other reliable means (e.g. physical identification).
 
 #### What if I would forget my passphrase?
 
-It would be impossible to decrypt the data.
+It would be practically impossible to decrypt the data.
 
 ## Caveats
 

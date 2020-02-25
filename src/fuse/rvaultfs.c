@@ -461,7 +461,7 @@ static const struct fuse_operations rvaultfs_ops = {
 };
 
 int
-rvaultfs_run(rvault_t *vault, const char *mountpoint)
+rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	struct fuse *fuse;
@@ -483,7 +483,7 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 	fuse_opt_add_arg(&args, "-odefault_permissions");
 #ifdef __APPLE__
 	fuse_opt_add_arg(&args, "-oiosize=16777216"); // 16 MB
-	// fuse_opt_add_arg(&args, "-onoubc");
+	fuse_opt_add_arg(&args, "-onoubc");
 	// fuse_opt_add_arg(&args, "-oauto_xattr");
 #endif
 	// fuse_opt_add_arg(&args, "-oauto_unmount");
@@ -500,6 +500,7 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 		fuse_destroy(fuse);
 		return -1;
 	}
+	(void)fuse_daemonize(fg);
 	ret = fuse_loop(fuse);
 	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
 	fuse_unmount(fuse);
@@ -514,6 +515,7 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint)
 		fuse_unmount(mountpoint, chan);
 		return -1;
 	}
+	(void)fuse_daemonize(fg);
 	ret = fuse_loop(fuse);
 	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
 	fuse_unmount(mountpoint, chan);

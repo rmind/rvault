@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -18,7 +18,7 @@
  *	Initialization:
  *
  *	- User (client) securely registers itself with the server, presenting
- *	its unique identification (UID) and authentication parameters, e.g.
+ *	its unique identification (UID) and authentication details, e.g. the
  *	OTP secret / token sequence.
  *
  *	- Envelope encryption: client generates K_p and K_e and encrypts
@@ -44,14 +44,14 @@
  *
  * Algorithms:
  *
- * - scrypt for the key derivation function (KDF).
- * - The passphrase is salted with a random value stored locally.
- * - AES 256 (CBC mode) or Chacha20 for symmetric encryption.
- * - Authenticated encryption:
- *       a) HMAC using SHA3 and MAC-then-Encrypt (MtE).
- *       b) AES+GCM and Chacha20+Poly1305 as alternatives to HMAC.
- * - The client-server communication is only over TLS.
- * - Authentication with the server using TOTP (RFC 6238).
+ *	- scrypt for the key derivation function (KDF).
+ *	- The passphrase is salted with a random value stored locally.
+ *	- AES 256 (CBC mode) or Chacha20 for symmetric encryption.
+ *	- Authenticated encryption:
+ *		a) HMAC using SHA3 and MAC-then-Encrypt (MtE).
+ *		b) AES+GCM and Chacha20+Poly1305 as alternatives to HMAC.
+ *	- The client-server communication is only over TLS.
+ *	- Authentication with the server using TOTP (RFC 6238).
  */
 
 #include <sys/stat.h>
