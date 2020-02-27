@@ -500,7 +500,9 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg)
 		fuse_destroy(fuse);
 		return -1;
 	}
-	(void)fuse_daemonize(fg);
+	if (!fg) {
+		(void)fuse_daemonize(fuse);
+	}
 	ret = fuse_loop(fuse);
 	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
 	fuse_unmount(fuse);
