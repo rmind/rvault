@@ -288,7 +288,9 @@ str_tokenize(char *line, char **tokens, unsigned n)
  * Logging facility.
  */
 
-static int	app_log_level = LOG_WARNING;
+static int		app_log_level = LOG_WARNING;
+static FILE *		app_log_errfh = NULL;
+static __thread char	app_log_buf[64 * 1024];
 
 void
 app_setlog(int level)
@@ -296,32 +298,67 @@ app_setlog(int level)
 	app_log_level = level;
 }
 
+int
+app_set_errorfile(const char *fmt, ...)
+{
+	char path[PATH_MAX];
+	va_list ap;
+	int ret;
+
+	va_start(ap, fmt);
+	ret = vsnprintf(path, sizeof(path), fmt, ap);
+	va_end(ap);
+
+	if (ret == -1 || (app_log_errfh = fopen(path, "a")) == NULL) {
+		return -1;
+	}
+	return 0;
+}
+
+static void
+app_log_fwrite(int level, const char *msg)
+{
+	FILE *fp = (level <= LOG_ERR) ? stderr : stdout;
+
+	fprintf(fp, "%s\n", msg);
+	if (level <= LOG_ERR && app_log_errfh) {
+		fprintf(app_log_errfh, "%s\n", msg);
+	}
+}
+
 void
 app_log(int level, const char *fmt, ...)
 {
-	FILE *fp = (level <= LOG_ERR) ? stderr : stdout;
 	va_list ap;
 
 	if (level > app_log_level) {
 		return;
 	}
 	va_start(ap, fmt);
-	vfprintf(fp, fmt, ap);
+	vsnprintf(app_log_buf, sizeof(app_log_buf), fmt, ap);
 	va_end(ap);
-	fputs("\n", fp);
+
+	app_log_fwrite(level, app_log_buf);
 }
 
 void
 app_elog(int level, const char *fmt, ...)
 {
 	const int errno_saved = errno;
+	ssize_t ret;
 	va_list ap;
 
 	if (level > app_log_level) {
 		return;
 	}
 	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
+	ret = vsnprintf(app_log_buf, sizeof(app_log_buf), fmt, ap);
 	va_end(ap);
-	fprintf(stderr, ": %s\n", strerror(errno_saved));
+
+	if (ret < 0 || (size_t)ret >= sizeof(app_log_buf) ||
+	    snprintf(app_log_buf + ret, sizeof(app_log_buf) - ret,
+	    ": %s\n", strerror(errno_saved)) == -1) {
+		return; // error;
+	}
+	app_log_fwrite(level, app_log_buf);
 }

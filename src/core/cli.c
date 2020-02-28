@@ -174,19 +174,23 @@ open_vault(const char *datapath, const char *server)
 static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "fh?";
+	static const char *opts_s = "dfh?";
 	static struct option opts_l[] = {
+		{ "debug",	no_argument,		0,	'd'	},
 		{ "foreground",	no_argument,		0,	'f'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
 	rvault_t *vault;
 	const char *mountpoint;
-	bool fg = false;
+	bool fg = false, debug = false;
 	int ch;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
+		case 'd':
+			debug = true;
+			break;
 		case 'f':
 			fg = true;
 			break;
@@ -204,7 +208,7 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 	mountpoint = argv[0];
 
 	vault = open_vault(datapath, server);
-	rvaultfs_run(vault, mountpoint, fg);
+	rvaultfs_run(vault, mountpoint, fg, debug);
 	rvault_close(vault);
 	return 0;
 usage:
@@ -214,6 +218,7 @@ usage:
 	    "Mount the vault at the given path.\n"
 	    "\n"
 	    "Options:\n"
+	    "  -d|--debug       Enable FUSE-level debug logging.\n"
 	    "  -f|--foreground  Run in the foreground (do not daemonize).\n"
 	    "\n"
 	);
@@ -573,6 +578,7 @@ main(int argc, char **argv)
 		usage_datapath();
 	}
 	setup_pid("%s/"APP_NAME".pid", data_path);
+	app_set_errorfile("%s/"APP_NAME".error_log", data_path);
 	app_setlog(loglevel);
 
 	return process_command(data_path, server, argc, argv);

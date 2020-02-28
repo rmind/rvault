@@ -184,6 +184,7 @@ char *		tmpfile_get_name(const char *);
 unsigned	str_tokenize(char *, char **, unsigned);
 
 void		app_setlog(int);
+int		app_set_errorfile(const char *, ...);
 void		app_log(int, const char *, ...);
 void		app_elog(int, const char *, ...);
 
