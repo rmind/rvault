@@ -121,9 +121,11 @@ Delete the secret.
 The given names must not have white spaces.
 The secret will be asked in a prompt.
 .\" ---
-.It Ic mount Oo Fl f Oc Oo Fl h Oc Ar path
+.It Ic mount Oo Fl d Oc Oo Fl f Oc Oo Fl h Oc Ar path
 Mount the vault as a FUSE file system at the given path.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl d
+Enable FUSE-level debug logging.
 .It Fl f
 Run in the foreground, i.e. do not daemonize.
 .It Fl h
@@ -146,6 +148,17 @@ The following environment variables are available:
 Base path of the vault data.
 .It Ev RVAULT_SERVER
 Authentication server address.
+.El
+.\" -----
+.Sh FILES
+The following files reside in the directory specified by
+.Ev RVAULT_PATH :
+.Pp
+.Bl -tag -width xxxxxxxxxxxxxxxxxx -compact
+.It Pa rvault.metadata
+vault information/metadata file
+.It Pa rvault.error_log
+error log
 .El
 .\" -----
 .Sh EXAMPLES

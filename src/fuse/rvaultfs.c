@@ -461,7 +461,7 @@ static const struct fuse_operations rvaultfs_ops = {
 };
 
 int
-rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg)
+rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg, bool debug)
 {
 	struct fuse_args args = FUSE_ARGS_INIT(0, NULL);
 	struct fuse *fuse;
@@ -487,10 +487,9 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg)
 	// fuse_opt_add_arg(&args, "-oauto_xattr");
 #endif
 	// fuse_opt_add_arg(&args, "-oauto_unmount");
-#ifdef FUSE_DEBUG
-	fuse_opt_add_arg(&args, "-odebug");
-#endif
-
+	if (debug) {
+		fuse_opt_add_arg(&args, "-odebug");
+	}
 #if defined(__NetBSD__)
 	fuse = fuse_new(&args, &rvaultfs_ops, sizeof(rvaultfs_ops), vault);
 	if (fuse == NULL) {
