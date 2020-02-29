@@ -1,37 +1,46 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+#include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <inttypes.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <assert.h>
 
 #include "rvault.h"
+#include "storage.h"
+#include "fileobj.h"
 #include "utils.h"
 #include "mock.h"
 
 int
-get_tmp_file(void)
+mock_get_tmpfile(char **pathp)
 {
-	char path[PATH_MAX];
+	char path_storage[PATH_MAX], *path;
 	int fd;
 
-	snprintf(path, sizeof(path) - 1, "/tmp/rvault-test.XXXXXX");
+	path = pathp ? calloc(1, PATH_MAX) : path_storage;
+	snprintf(path, PATH_MAX, "/tmp/rvault-test.XXXXXX");
 	fd = mkstemp(path);
 	assert(fd != -1);
-	unlink(path);
+	if (pathp) {
+		*pathp = path;
+	} else {
+		unlink(path);
+	}
 	return fd;
 }
 
 void
-corrupt_byte_at(int fd, off_t offset, unsigned char *bytep)
+mock_corrupt_byte_at(int fd, off_t offset, unsigned char *bytep)
 {
 	unsigned char byte;
 	ssize_t nbytes;
@@ -48,13 +57,13 @@ corrupt_byte_at(int fd, off_t offset, unsigned char *bytep)
 }
 
 char *
-get_vault_dir(void)
+mock_get_vault_dir(void)
 {
 	return mkdtemp(strdup("/tmp/rvault-test.XXXXXX"));
 }
 
 void
-cleanup_vault_dir(char *path)
+mock_cleanup_vault_dir(char *path)
 {
 	char metafile[PATH_MAX];
 	snprintf(metafile, sizeof(metafile), "%s/%s", path, RVAULT_META_FILE);
@@ -64,9 +73,9 @@ cleanup_vault_dir(char *path)
 }
 
 rvault_t *
-get_vault(const char *cipher, char **path)
+mock_get_vault(const char *cipher, char **path)
 {
-	char *base_path = get_vault_dir();
+	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
 	rvault_t *vault;
 
@@ -80,10 +89,36 @@ get_vault(const char *cipher, char **path)
 }
 
 void
-cleanup_vault(rvault_t *vault, char *base_path)
+mock_cleanup_vault(rvault_t *vault, char *base_path)
 {
 	rvault_close(vault);
-	cleanup_vault_dir(base_path);
+	mock_cleanup_vault_dir(base_path);
+}
+
+void
+mock_vault_fwrite(rvault_t *vault, const char *f, const char *data)
+{
+	const size_t datalen = strlen(data);
+	fileobj_t *fobj = fileobj_open(vault, f, O_CREAT | O_RDWR, FOBJ_OMASK);
+	ssize_t nbytes = fileobj_pwrite(fobj, data, datalen, 0);
+	assert(nbytes == (ssize_t)datalen);
+	fileobj_close(fobj);
+}
+
+void
+mock_vault_fcheck(rvault_t *vault, const char *f, const char *data)
+{
+	const size_t datalen = strlen(data);
+	fileobj_t *fobj = fileobj_open(vault, f, O_RDONLY, FOBJ_OMASK);
+	char buf[1024];
+	ssize_t nbytes;
+
+	assert(datalen < sizeof(buf));
+	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	assert(nbytes == (ssize_t)datalen);
+	buf[nbytes] = '\0';
+	assert(strcmp(data, buf) == 0);
+	fileobj_close(fobj);
 }
 
 void *

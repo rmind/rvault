@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -8,17 +8,12 @@
 #ifndef	_RVAULT_H_
 #define	_RVAULT_H_
 
+#include <stdio.h>
 #include <sys/queue.h>
 #include "crypto.h"
 
 #define	APP_NAME		"rvault"
 #define	APP_PROJ_VER		"0.1"
-
-#define	RVAULT_ABI_VER		1
-#define	RVAULT_META_FILE	"rvault.metadata"
-
-#define	RVAULT_META_PREF	"rvault."
-#define	RVAULT_META_PREFLEN	(sizeof(RVAULT_META_PREF) - 1)
 
 struct fileobj;
 
@@ -36,12 +31,14 @@ typedef struct {
 
 #define	RVAULT_FLAG_NOAUTH	(1U << 0)	// authentication disabled
 
+void *		open_metadata_mmap(const char *, char **, size_t *);
+
 int		rvault_init(const char *, const char *, const char *,
 		    const char *, const char *, unsigned);
 rvault_t *	rvault_open(const char *, const char *, const char *);
+rvault_t *	rvault_open_ekey(const char *, const char *);
 void		rvault_close(rvault_t *);
 
-void		rvault_export_key(rvault_t *);
 int		rvault_key_set(rvault_t *);
 int		rvault_key_get(rvault_t *);
 int		rvault_unhex_aedata(const char *, void **, size_t *,

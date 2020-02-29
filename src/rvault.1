@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd February 24, 2020
+.Dd March 1, 2020
 .Dt RVAULT 1
 .Os
 .Sh NAME
@@ -93,11 +93,18 @@ This command can be used to backup the key and relevant metadata
 for recovery purposes.
 WARNING: Leaking this key would compromise the data, therefore expose it
 with caution.
+.Pp
+This data can later be typed into a file and vault recovered using the
+.Ic mount
+command with the
+.Fl r
+flag.
+The recovery data must be typed back exactly as it was printed.
 .\" ---
 .It Ic ls Oo Fl a Oc Oo Fl h Oc Op path
 List the vault contents.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
-.It Fl a
+.It Fl a | Fl Fl all
 Show all files and directories, including the files beginning with dot.
 .It Fl h
 Show help of this command.
@@ -121,13 +128,15 @@ Delete the secret.
 The given names must not have white spaces.
 The secret will be asked in a prompt.
 .\" ---
-.It Ic mount Oo Fl d Oc Oo Fl f Oc Oo Fl h Oc Ar path
+.It Ic mount Oo Fl d Oc Oo Fl f Oc Oo Fl r Ar path Oc Oo Fl h Oc Ar path
 Mount the vault as a FUSE file system at the given path.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
-.It Fl d
+.It Fl d | Fl Fl debug
 Enable FUSE-level debug logging.
-.It Fl f
+.It Fl f | Fl Fl foreground
 Run in the foreground, i.e. do not daemonize.
+.It Fl r | Fl Fl recover Ar path
+Mount the vault using the recovery file.
 .It Fl h
 Show help of this command.
 .El
@@ -158,7 +167,7 @@ The following files reside in the directory specified by
 .It Pa rvault.metadata
 vault information/metadata file
 .It Pa rvault.error_log
-error log
+error log (use for troubleshooting)
 .El
 .\" -----
 .Sh EXAMPLES

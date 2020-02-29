@@ -124,6 +124,7 @@ OBJS+=		core/cli.o
 OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
 OBJS+=		core/http_req.o
+OBJS+=		core/recovery.o
 ifeq ($(SQLITE3_SERIALIZE),1)
 OBJS+=		core/sdb.o
 endif
