@@ -322,7 +322,13 @@ app_log_fwrite(int level, const char *msg)
 
 	fprintf(fp, "%s\n", msg);
 	if (level <= LOG_ERR && app_log_errfh) {
-		fprintf(app_log_errfh, "%s\n", msg);
+		const time_t now = time(NULL);
+		struct tm tm;
+		char time[64];
+
+		localtime_r(&now, &tm);
+		strftime(time, sizeof(time), "%d/%b/%Y:%H:%M:%S %z", &tm);
+		fprintf(app_log_errfh, "[%s] %s\n", time, msg);
 	}
 }
 
