@@ -34,6 +34,8 @@ typedef struct {
 	sqlite3 *	db;
 } sdb_t;
 
+static sdb_t *sdb_readline_ctx = NULL; // XXX
+
 static int
 sdb_init(sqlite3 *db)
 {
@@ -157,7 +159,7 @@ sdb_close(sdb_t *sdb)
 ///////////////////////////////////////////////////////////////////////////////
 
 static int
-sdb_query(sdb_t *sdb, const char *query, const char *k, const char *v)
+sdb_query(sdb_t *sdb, const char *query, const char *k, const char *v, FILE *fp)
 {
 	sqlite3_stmt *stmt = NULL;
 	int ret = -1;
@@ -173,9 +175,10 @@ sdb_query(sdb_t *sdb, const char *query, const char *k, const char *v)
 		const unsigned ncols = sqlite3_column_count(stmt);
 
 		for (unsigned i = 0; i < ncols; i++) {
-			if (sqlite3_column_type(stmt, i)) {
-				printf("%s\n", sqlite3_column_text(stmt, i));
+			if (sqlite3_column_type(stmt, i) != SQLITE_TEXT) {
+				continue;
 			}
+			fprintf(fp, "%s\n", sqlite3_column_text(stmt, i));
 		}
 	}
 	ret = 0;
@@ -221,7 +224,7 @@ sdb_exec_cmd(sdb_t *sdb, char *line)
 
 		key = (sdb_cmds[i].params >= 1) ? tokens[1] : NULL;
 		secret = (sdb_cmds[i].params >= 2) ? getpass("Secret:") : NULL;
-		ret = sdb_query(sdb, sdb_cmds[i].query, key, secret);
+		ret = sdb_query(sdb, sdb_cmds[i].query, key, secret, stdout);
 
 		if (secret) {
 			crypto_memzero(secret, strlen(secret));
@@ -242,7 +245,7 @@ cmd_generator(const char *text, const int state)
 		cmd_iter_idx = 0;
 		text_len = strlen(text);
 	}
-	while (cmd_iter_idx <__arraycount(sdb_cmds)) {
+	while (cmd_iter_idx < __arraycount(sdb_cmds)) {
 		const char *cmd = sdb_cmds[cmd_iter_idx++].cmd;
 		if (strncasecmp(cmd, text, text_len) == 0) {
 			return strdup(cmd);
@@ -252,19 +255,50 @@ cmd_generator(const char *text, const int state)
 	return NULL;
 }
 
-static char **
-cmd_completion(const char *text, const int start, const int end)
+static char *
+keyname_generator(const char *text, const int state)
 {
-	(void)start; (void)end;
+	static FILE *fp = NULL;
+	static char *buf = NULL;
+	static size_t len = 0;
+	char keyname[1024];
 
+	if (!state) {
+		const char *query = "SELECT key FROM sdb WHERE key LIKE ?";
+		char *like = NULL;
+
+		if ((fp = open_memstream(&buf, &len)) == NULL) {
+			return NULL;
+		}
+		if (asprintf(&like, "%s%%", text) == -1) {
+			fclose(fp);
+			return NULL;
+		}
+		sdb_query(sdb_readline_ctx, query, like, NULL, fp);
+		fclose(fp);
+		free(like);
+
+		if ((fp = fmemopen(buf, len, "r")) == NULL) {
+			free(buf);
+			return NULL;
+		}
+	}
+	if (fgets(keyname, sizeof(keyname) - 1, fp) && keyname[0]) {
+		return strndup(keyname, strlen(keyname) - 1);
+	}
+	fclose(fp);
+	free(buf);
+	buf = NULL;
+	return NULL;
+}
+
+static char **
+cmd_completion(const char *text, const int start, const int end __unused)
+{
 	/* Note: disable default of path completion. */
 	rl_attempted_completion_over = 1;
-#if 0
-	if (start && rl_line_buffer[end - 1] == ' ') {
-		return rl_completion_matches(text, secret_name_generator);
-	}
-#endif
-	return rl_completion_matches(text, cmd_generator);
+	return rl_completion_matches(text,
+	    start ? keyname_generator : cmd_generator);
 }
 
 static void
@@ -299,6 +333,7 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 		return -1;
 	}
 	rl_attempted_completion_function = cmd_completion;
+	sdb_readline_ctx = sdb;
 	while ((line = readline("> ")) != NULL) {
 		if (sdb_exec_cmd(sdb, line) == 0) {
 			sdb_sync(vault, sdb);

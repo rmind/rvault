@@ -82,9 +82,11 @@ endif
 # Dependencies: compiler flags and libraries to link.
 #
 
-SQLITE3_SERIALIZE:=	$(shell echo "\#include <sqlite3.h>\n\
-    main() { sqlite3_serialize(NULL, "", NULL, 0);}" | \
-    $(CC) -o /dev/null -Werror -xc - \
+SQLITE3_SERIALIZE:=	$(shell echo '\
+    \#include <stdio.h>\n\
+    \#include <sqlite3.h>\n\
+    int main() { sqlite3_serialize(NULL, "", NULL, 0); return 0; }' | \
+    $(CC) -o /dev/null -xc -lsqlite3 - \
     >/dev/null 2>/dev/null && echo 1 || echo 0)
 
 ifeq ($(SYSNAME),Darwin)
@@ -146,7 +148,8 @@ OBJS+=		crypto/openssl.o
 # object files for the tests
 #
 TEST_OBJS:=	$(shell echo $(OBJS) |			\
-		    sed 's:core/cli.o::'		\
+		    sed 's:core/cli.o::' |		\
+		    sed 's:core/sdb.o::'		\
 		)
 TEST_OBJS+=	tests/mock.o
 TESTS:=		$(patsubst tests/%.c,%,$(wildcard tests/t_*.c))
