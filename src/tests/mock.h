@@ -13,14 +13,17 @@
 
 #define	TEST_UUID	"a4fcd889-b7be-404a-ae15-2840c22f4b9a"
 
-int		get_tmp_file(void);
-void		corrupt_byte_at(int, off_t, unsigned char *);
+int		mock_get_tmpfile(char **);
+void		mock_corrupt_byte_at(int, off_t, unsigned char *);
 
-char *		get_vault_dir(void);
-void		cleanup_vault_dir(char *);
+char *		mock_get_vault_dir(void);
+void		mock_cleanup_vault_dir(char *);
 
-rvault_t *	get_vault(const char *, char **);
-void		cleanup_vault(rvault_t *, char *);
+rvault_t *	mock_get_vault(const char *, char **);
+void		mock_cleanup_vault(rvault_t *, char *);
+
+void		mock_vault_fwrite(rvault_t *, const char *, const char *);
+void		mock_vault_fcheck(rvault_t *, const char *, const char *);
 
 void *		hex_readmem_arbitrary(const char *, size_t, size_t *);
 

@@ -121,15 +121,16 @@ static void
 run_tests(void)
 {
 	char *base_path = NULL;
-	rvault_t *vault = get_vault("chacha20-poly1305", &base_path);
+	rvault_t *vault = mock_get_vault("chacha20-poly1305", &base_path);
 	test_file_expand(vault);
 	test_file_onebyte(vault);
-	cleanup_vault(vault, base_path);
+	mock_cleanup_vault(vault, base_path);
 }
 
 int
 main(void)
 {
 	run_tests();
+	puts("ok");
 	return 0;
 }

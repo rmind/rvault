@@ -18,7 +18,7 @@
 static void
 test_basic(rvault_t *vault)
 {
-	const int fd = get_tmp_file();
+	const int fd = mock_get_tmpfile(NULL);
 	ssize_t nbytes, file_len;
 	size_t len;
 	void *buf;
@@ -40,7 +40,7 @@ test_basic(rvault_t *vault)
 static void
 test_corrupted(rvault_t *vault)
 {
-	const int fd = get_tmp_file();
+	const int fd = mock_get_tmpfile(NULL);
 	ssize_t nbytes, file_len;
 	size_t len;
 	void *buf;
@@ -49,7 +49,7 @@ test_corrupted(rvault_t *vault)
 	file_len = fs_file_size(fd);
 	assert(nbytes > 0 && file_len == nbytes);
 
-	corrupt_byte_at(fd, file_len - 1, NULL);
+	mock_corrupt_byte_at(fd, file_len - 1, NULL);
 
 	buf = storage_read_data(vault, fd, file_len, &len);
 	assert(buf == NULL);
@@ -60,10 +60,10 @@ static void
 run_tests(const char *cipher)
 {
 	char *base_path = NULL;
-	rvault_t *vault = get_vault(cipher, &base_path);
+	rvault_t *vault = mock_get_vault(cipher, &base_path);
 	test_basic(vault);
 	test_corrupted(vault);
-	cleanup_vault(vault, base_path);
+	mock_cleanup_vault(vault, base_path);
 }
 
 int

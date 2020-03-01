@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -14,13 +14,15 @@
 #include <assert.h>
 
 #include "rvault.h"
+#include "recovery.h"
 #include "utils.h"
 #include "mock.h"
+#include "sys.h"
 
 static void
 test_basic(void)
 {
-	char *base_path = get_vault_dir();
+	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
 	rvault_t *vault;
 	int ret;
@@ -33,14 +35,14 @@ test_basic(void)
 	assert(vault != NULL);
 	rvault_close(vault);
 
-	cleanup_vault_dir(base_path);
+	mock_cleanup_vault_dir(base_path);
 	free(passphrase);
 }
 
 static void
 test_invalid_passphrase(void)
 {
-	char *base_path = get_vault_dir();
+	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
 	rvault_t *vault;
 	int ret;
@@ -52,8 +54,43 @@ test_invalid_passphrase(void)
 	vault = rvault_open(base_path, NULL, passphrase);
 	assert(vault == NULL);
 
-	cleanup_vault_dir(base_path);
+	mock_cleanup_vault_dir(base_path);
 	free(passphrase);
+}
+
+static void
+test_recovery(void)
+{
+	char *base_path = NULL, *buf = NULL, *recovery = NULL;
+	rvault_t *vault;
+	size_t len = 0;
+	FILE *fp;
+	int fd;
+
+	/* Create a vault and export the recovery data. */
+	fp = open_memstream(&buf, &len);
+	vault = mock_get_vault("aes-256-gcm", &base_path);
+	mock_vault_fwrite(vault, "/some-file", "arbitrary data");
+	rvault_recovery_export(vault, fp);
+	rvault_close(vault);
+	fclose(fp);
+
+	/* Write the recovery key to the temporary file. */
+	fd = mock_get_tmpfile(&recovery);
+	fs_write(fd, buf, len);
+	close(fd);
+	free(buf);
+
+	/* Open the vault with the recovery file. */
+	vault = rvault_open_ekey(base_path, recovery);
+	assert(vault != NULL);
+
+	/* Verify the file. */
+	mock_vault_fcheck(vault, "/some-file", "arbitrary data");
+	mock_cleanup_vault(vault, base_path);
+
+	unlink(recovery);
+	free(recovery);
 }
 
 static void
@@ -117,11 +154,11 @@ test_paths(void)
 int
 main(void)
 {
-	app_setlog(LOG_ERR);
+	app_setlog(0);
 	test_basic();
+	test_recovery();
 	test_invalid_passphrase();
 	test_paths();
-
 	puts("ok");
 	return 0;
 }

@@ -69,6 +69,7 @@
 #include "fileobj.h"
 #include "storage.h"
 #include "crypto.h"
+#include "recovery.h"
 #include "sys.h"
 
 #define	RVAULT_META_MODE	0600
@@ -88,8 +89,29 @@ usage_srvurl(void)
 }
 
 /*
- * open_metadata: normalize the path, check that it points to a directory,
- * open (or create) the vault metadata file
+ * get_vault_path: normalize the path and check that it points to a directory.
+ */
+static char *
+get_vault_path(const char *path)
+{
+	struct stat st;
+	char *rpath;
+
+	if ((rpath = realpath(path, NULL)) == NULL) {
+		app_log(LOG_CRIT, APP_NAME": location `%s' not found", path);
+		return NULL;
+	}
+	if (stat(rpath, &st) == -1 || (st.st_mode & S_IFMT) != S_IFDIR) {
+		app_log(LOG_CRIT,
+		    APP_NAME": path `%s' is not a directory", rpath);
+		free(rpath);
+		return NULL;
+	}
+	return rpath;
+}
+
+/*
+ * open_metadata: open (or create) the vault metadata file.
  *
  * => Returns the file descriptor or -1 on error.
  * => On success, also return the normalized base path.
@@ -98,17 +120,10 @@ static int
 open_metadata(const char *path, char **normalized_path, int flags)
 {
 	char *rpath, *fpath = NULL;
-	struct stat st;
 	int fd;
 
-	if ((rpath = realpath(path, NULL)) == NULL) {
-		app_log(LOG_CRIT, APP_NAME": location `%s' not found", path);
+	if ((rpath = get_vault_path(path)) == NULL) {
 		return -1;
-	}
-	if (stat(rpath, &st) == -1 || (st.st_mode & S_IFMT) != S_IFDIR) {
-		app_log(LOG_CRIT,
-		    APP_NAME": path `%s' is not a directory", rpath);
-		goto err;
 	}
 	if (asprintf(&fpath, "%s/%s", rpath, RVAULT_META_FILE) == -1) {
 		app_log(LOG_CRIT, APP_NAME": could not allocate memory");
@@ -136,7 +151,7 @@ err:
 /*
  * open_metadata_mmap: get the read-only mapping of the vault metadata.
  */
-static void *
+void *
 open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 {
 	ssize_t len;
@@ -329,58 +344,89 @@ err:
 	return ret;
 }
 
+static rvault_t *
+rvault_open_hdr(rvault_hdr_t *hdr, const char *server, const size_t file_len)
+{
+	rvault_t *vault;
+	const void *iv;
+	size_t iv_len;
+
+	/* Verify the ABI version. */
+	if (hdr->ver != RVAULT_ABI_VER) {
+		app_log(LOG_CRIT, APP_NAME": incompatible vault version %u\n"
+		    "Hint: vault might have been created using a newer "
+		    "application version", hdr->ver);
+		return NULL;
+	}
+
+	/*
+	 * Verify the lengths: we can trust iv_len and kp_len after this.
+	 */
+	if (RVAULT_FILE_LEN(hdr) != file_len) {
+		app_log(LOG_CRIT, "rvault: metadata file corrupted");
+		return NULL;
+	}
+	iv_len = be16toh(hdr->iv_len);
+	iv = RVAULT_HDR_TO_IV(hdr);
+
+	/*
+	 * Create and initialize the vault object.
+	 */
+	if ((vault = calloc(1, sizeof(rvault_t))) == NULL) {
+		return NULL;
+	}
+	vault->cipher = hdr->cipher;
+	vault->server_url = server;
+	LIST_INIT(&vault->file_list);
+
+	memcpy(vault->uid, hdr->uid, sizeof(hdr->uid));
+	static_assert(sizeof(vault->uid) == sizeof(hdr->uid), "UUID length");
+
+	/*
+	 * Create the crypto object and set the IV.
+	 */
+	if ((vault->crypto = crypto_create(vault->cipher)) == NULL) {
+		goto err;
+	}
+	if (crypto_set_iv(vault->crypto, iv, iv_len) == -1) {
+		goto err;
+	}
+	return vault;
+err:
+	rvault_close(vault);
+	return NULL;
+}
+
 /*
  * rvault_open: open the vault at the given directory.
  */
 rvault_t *
 rvault_open(const char *path, const char *server, const char *pwd)
 {
-	rvault_t *vault;
+	rvault_t *vault = NULL;
+	char *base_path = NULL;
 	rvault_hdr_t *hdr;
-	size_t file_len, iv_len, kp_len;
-	const void *iv, *kp;
+	size_t file_len, kp_len;
+	const void *kp;
 
-	if ((vault = calloc(1, sizeof(rvault_t))) == NULL) {
-		return NULL;
-	}
-	vault->server_url = server;
-	LIST_INIT(&vault->file_list);
-
-	hdr = open_metadata_mmap(path, &vault->base_path, &file_len);
+	hdr = open_metadata_mmap(path, &base_path, &file_len);
 	if (hdr == NULL) {
 		goto err;
 	}
-	if (hdr->ver != RVAULT_ABI_VER) {
-		app_log(LOG_CRIT, APP_NAME": incompatible vault version %u\n"
-		    "Hint: vault might have been created using a newer "
-		    "application version", hdr->ver);
+	vault = rvault_open_hdr(hdr, server, file_len);
+	if (vault == NULL) {
 		goto err;
 	}
-	vault->cipher = hdr->cipher;
-	memcpy(vault->uid, hdr->uid, sizeof(hdr->uid));
-	static_assert(sizeof(vault->uid) == sizeof(hdr->uid), "UUID length");
+	vault->base_path = base_path;
 
-	iv_len = be16toh(hdr->iv_len);
+	/*
+	 * Set the vault key.
+	 *
+	 * NOTE: rvault_open_hdr() verified the header for us, therefore
+	 * we can trust the 'kp_len' at this point.
+	 */
 	kp_len = hdr->kp_len;
-
-	/*
-	 * Verify the lengths: we can trust iv_len and kp_len after this.
-	 */
-	if (RVAULT_FILE_LEN(hdr) != file_len) {
-		goto err;
-	}
-	iv = RVAULT_HDR_TO_IV(hdr);
 	kp = RVAULT_HDR_TO_KP(hdr);
-
-	/*
-	 * Create the crypto object.  Set the IV and key.
-	 */
-	if ((vault->crypto = crypto_create(hdr->cipher)) == NULL) {
-		goto err;
-	}
-	if (crypto_set_iv(vault->crypto, iv, iv_len) == -1) {
-		goto err;
-	}
 	if (crypto_set_passphrasekey(vault->crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
@@ -413,28 +459,71 @@ err:
 	if (hdr) {
 		safe_munmap(hdr, file_len, 0);
 	}
-	rvault_close(vault);
+	if (vault) {
+		rvault_close(vault);
+	}
 	return NULL;
 }
 
-void
-rvault_export_key(rvault_t *vault)
+/*
+ * rvault_open_ekey: open vault for recovery using a given effective key.
+ */
+rvault_t *
+rvault_open_ekey(const char *path, const char *recovery)
 {
+	rsection_t *sections;
+	rvault_t *vault = NULL;
+	char *base_path = NULL;
+	size_t hdrlen, keylen;
 	rvault_hdr_t *hdr;
-	size_t key_len, file_len;
-	const void *key;
+	void *key;
+	FILE *fp;
 
-	puts("METADATA:");
-	hdr = open_metadata_mmap(vault->base_path, NULL, &file_len);
-	hex_write_wrapped(stdout, hdr, file_len);
-	puts("");
+	/*
+	 * Open and parse the recovery file.
+	 */
+	if ((fp = fopen(recovery, "r")) == NULL) {
+		app_elog(LOG_CRIT, APP_NAME": could not open `%s'", recovery);
+		return NULL;
+	}
+	sections = rvault_recovery_import(fp);
+	fclose(fp);
+	if (!sections) {
+		return NULL;
+	}
 
-	puts("KEY:");
-	key = crypto_get_key(vault->crypto, &key_len);
-	hex_write_wrapped(stdout, key, key_len);
-	puts("");
+	/* Get the sections. */
+	hdr = sections[RECOVERY_METADATA].buf;
+	hdrlen = sections[RECOVERY_METADATA].nbytes;
 
-	safe_munmap(hdr, file_len, 0);
+	key = sections[RECOVERY_EKEY].buf;
+	keylen = sections[RECOVERY_EKEY].nbytes;
+
+	/*
+	 * Create the "recovery" vault object using the metadata.
+	 */
+	if ((base_path = get_vault_path(path)) == NULL) {
+		goto err;
+	}
+	vault = rvault_open_hdr(hdr, NULL, hdrlen);
+	if (vault == NULL) {
+		goto err;
+	}
+	vault->base_path = base_path;
+	base_path = NULL;
+
+	/*
+	 * Set the key.
+	 */
+	if (crypto_set_key(vault->crypto, key, keylen) == -1) {
+		rvault_close(vault);
+		vault = NULL;
+		goto err;
+	}
+err:
+	rvault_recovery_release(sections);
+	free(base_path);
+	return vault;
 }
 
 static void

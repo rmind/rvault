@@ -10,6 +10,16 @@
 
 #include "utils.h"
 
+/*
+ * rvault storage ABI.
+ */
+
+#define	RVAULT_ABI_VER		1
+#define	RVAULT_META_FILE	"rvault.metadata"
+
+#define	RVAULT_META_PREF	"rvault."
+#define	RVAULT_META_PREFLEN	(sizeof(RVAULT_META_PREF) - 1)
+
 #define	STORAGE_ALIGNMENT	UINT64_C(8)
 #define	STORAGE_ALIGN(x)	roundup2((size_t)(x), STORAGE_ALIGNMENT)
 

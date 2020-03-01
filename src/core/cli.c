@@ -20,6 +20,7 @@
 #include "rvault.h"
 #include "rvaultfs.h"
 #include "fileobj.h"
+#include "recovery.h"
 #include "cli.h"
 #include "sys.h"
 #include "utils.h"
@@ -131,7 +132,7 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 	return ret;
 usage:
 	fprintf(stderr,
-	    "Usage:\t" APP_NAME " create UID\n"
+	    "Usage:\t" APP_NAME " create [ -n ] [ -c cipher ] UID\n"
 	    "\n"
 	    "Create a new vault with the given UID.\n"
 	    "\n"
@@ -174,15 +175,16 @@ open_vault(const char *datapath, const char *server)
 static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "dfh?";
+	static const char *opts_s = "dfr:h?";
 	static struct option opts_l[] = {
 		{ "debug",	no_argument,		0,	'd'	},
 		{ "foreground",	no_argument,		0,	'f'	},
+		{ "recover",	required_argument,	0,	'r'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
 	rvault_t *vault;
-	const char *mountpoint;
+	const char *mountpoint, *recover = NULL;
 	bool fg = false, debug = false;
 	int ch;
 
@@ -193,6 +195,9 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 			break;
 		case 'f':
 			fg = true;
+			break;
+		case 'r':
+			recover = optarg;
 			break;
 		case 'h':
 		case '?':
@@ -207,19 +212,26 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 	}
 	mountpoint = argv[0];
 
-	vault = open_vault(datapath, server);
+	vault = recover ?
+	    rvault_open_ekey(datapath, recover) :
+	    open_vault(datapath, server);
+	if (!vault) {
+		fprintf(stderr, "failed to open the vault -- exiting.\n");
+		exit(EXIT_FAILURE);
+	}
 	rvaultfs_run(vault, mountpoint, fg, debug);
 	rvault_close(vault);
 	return 0;
 usage:
 	fprintf(stderr,
-	    "Usage:\t" APP_NAME " mount PATH\n"
+	    "Usage:\t" APP_NAME " mount [ -d ] [ -f ] [ -r file ] PATH\n"
 	    "\n"
 	    "Mount the vault at the given path.\n"
 	    "\n"
 	    "Options:\n"
-	    "  -d|--debug       Enable FUSE-level debug logging.\n"
-	    "  -f|--foreground  Run in the foreground (do not daemonize).\n"
+	    "  -d|--debug         Enable FUSE-level debug logging.\n"
+	    "  -f|--foreground    Run in the foreground (do not daemonize).\n"
+	    "  -r|--recover PATH  Mount the vault using the recovery file.\n"
 	    "\n"
 	);
 	return -1;
@@ -250,7 +262,7 @@ export_key(const char *datapath, const char *server,
 	}
 
 	vault = open_vault(datapath, server);
-	rvault_export_key(vault);
+	rvault_recovery_export(vault, stdout);
 	rvault_close(vault);
 	return 0;
 }
@@ -368,7 +380,7 @@ file_list_cmd(const char *datapath, const char *server, int argc, char **argv)
 	return 0;
 usage:
 	fprintf(stderr,
-	    "Usage:\t" APP_NAME " ls [PATH]\n"
+	    "Usage:\t" APP_NAME " ls [ -a ] [PATH]\n"
 	    "\n"
 	    "List the vault content.\n"
 	    "The path must represent the namespace in vault.\n"
@@ -445,23 +457,29 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 	static const struct {
 		const char *	name;
 		cmd_func_t	func;
+		bool		setup_pid;
 	} commands[] = {
-		{ "create",	create_vault		},
-		{ "export-key",	export_key		},
-		{ "ls",		file_list_cmd,		},
+		{ "create",	create_vault,		false	},
+		{ "export-key",	export_key,		false	},
+		{ "ls",		file_list_cmd,		false	},
 #ifdef SQLITE3_SERIALIZE
-		{ "sdb",	sdb_cli,		},
+		{ "sdb",	sdb_cli,		false	},
 #else
-		{ "sdb",	sdb_sqlite3_mismatch,	},
+		{ "sdb",	sdb_sqlite3_mismatch,	false	},
 #endif
-		{ "mount",	mount_vault,		},
-		{ "read",	file_read_cmd,		},
-		{ "write",	file_write_cmd,		},
+		{ "mount",	mount_vault,		true	},
+		{ "read",	file_read_cmd,		false	},
+		{ "write",	file_write_cmd,		true	},
 	};
 
 	for (unsigned i = 0; i < __arraycount(commands); i++) {
 		if (strcmp(commands[i].name, argv[0]) == 0) {
 			int ret;
+
+			/* Setup PID, if relevant for the command. */
+			if (commands[i].setup_pid) {
+				setup_pid("%s/"APP_NAME".pid", datapath);
+			}
 
 			/* Run the command. */
 			ret = commands[i].func(datapath, server, argc, argv);
@@ -577,7 +595,6 @@ main(int argc, char **argv)
 	if (!data_path) {
 		usage_datapath();
 	}
-	setup_pid("%s/"APP_NAME".pid", data_path);
 	app_set_errorfile("%s/"APP_NAME".error_log", data_path);
 	app_setlog(loglevel);
 
