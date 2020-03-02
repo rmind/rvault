@@ -20,14 +20,16 @@
 #include "mock.h"
 #include "utils.h"
 
-static const char *rvault_v1_metadata =
-    "01 01 01 1c 00 10 6d 2f 2e 03 dd 71 41 29 85 ab"
-    "d5 e3 eb 3b 3e 47 00 00 f6 e9 26 4b bb b5 19 63"
-    "d4 0a 2f 81 77 1c 3f c3 01 00 00 00 00 00 00 00"
-    "00 00 40 00 ab 57 19 47 fe e3 bd eb 19 e3 71 ec"
-    "4c 7f fd fd 5f 43 25 03 a3 db e5 1b a0 a5 83 45"
-    "73 c7 21 44 b3 1e 5d 8a ce 98 e5 d0 9b 44 23 f2"
-    "7d 6e 6c be";
+/*
+ * rvault create -n -c aes-256-gcm 8bba987f-28b7-417e-9e78-dd733dfc2879
+ */
+static const char *rvault_v2_metadata =
+    "02 02 01 1c 00 0c 00 00 8b ba 98 7f 28 b7 41 7e"
+    "9e 78 dd 73 3d fc 28 79 ea 6b e3 47 47 d4 0e 9c"
+    "5b da 19 53 01 00 00 00 00 00 00 00 00 00 40 00"
+    "6a 05 71 52 79 10 39 c8 db e1 6f d6 d9 a1 10 b9"
+    "3e 57 d5 37 b9 47 49 a5 6f 1b ef 3d 3c 85 bc 78"
+    "8c 02 db fc 43 db f8 f5 1b 11 80 93 1c 79 71 03";
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -69,7 +71,7 @@ test_rvault_compat(const char *meta)
 int
 main(void)
 {
-	test_rvault_compat(rvault_v1_metadata);
+	test_rvault_compat(rvault_v2_metadata);
 	puts("ok");
 	return 0;
 }

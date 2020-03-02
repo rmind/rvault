@@ -14,7 +14,7 @@
  * rvault storage ABI.
  */
 
-#define	RVAULT_ABI_VER		1
+#define	RVAULT_ABI_VER		2
 #define	RVAULT_META_FILE	"rvault.metadata"
 #define	RVAULT_SDB_FILE		"rvault.sdb"
 
@@ -45,6 +45,7 @@ typedef struct {
 	uint8_t		flags;
 	uint8_t		kp_len;
 	uint16_t	iv_len;
+	uint16_t	reserved;
 	uint8_t		uid[16];
 } __attribute__((packed)) rvault_hdr_t;
 
