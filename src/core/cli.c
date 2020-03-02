@@ -175,17 +175,18 @@ open_vault(const char *datapath, const char *server)
 static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "dfr:h?";
+	static const char *opts_s = "dfr:s:h?";
 	static struct option opts_l[] = {
 		{ "debug",	no_argument,		0,	'd'	},
 		{ "foreground",	no_argument,		0,	'f'	},
 		{ "recover",	required_argument,	0,	'r'	},
+		{ "sync",	required_argument,	0,	's'	},
 		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
 	rvault_t *vault;
 	const char *mountpoint, *recover = NULL;
-	bool fg = false, debug = false;
+	bool fg = false, debug = false, weak_sync = false;
 	int ch;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
@@ -198,6 +199,9 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 			break;
 		case 'r':
 			recover = optarg;
+			break;
+		case 's':
+			weak_sync = strcasecmp(optarg, "weak") == 0;
 			break;
 		case 'h':
 		case '?':
@@ -219,6 +223,7 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 		fprintf(stderr, "failed to open the vault -- exiting.\n");
 		exit(EXIT_FAILURE);
 	}
+	vault->weak_sync = weak_sync;
 	rvaultfs_run(vault, mountpoint, fg, debug);
 	rvault_close(vault);
 	return 0;
@@ -232,6 +237,8 @@ usage:
 	    "  -d|--debug         Enable FUSE-level debug logging.\n"
 	    "  -f|--foreground    Run in the foreground (do not daemonize).\n"
 	    "  -r|--recover PATH  Mount the vault using the recovery file.\n"
+	    "  -s|--sync MODE     Sync mode on write operations: "
+	    "weak (faster) or full (safer).\n"
 	    "\n"
 	);
 	return -1;

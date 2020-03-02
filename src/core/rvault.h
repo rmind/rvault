@@ -20,6 +20,7 @@ struct fileobj;
 typedef struct {
 	char *			base_path;
 	const char *		server_url;
+	bool			weak_sync;
 
 	crypto_cipher_t		cipher;
 	crypto_t *		crypto;
