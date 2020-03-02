@@ -1,4 +1,5 @@
-PROJ=	rvault
+PROJ=		rvault
+RPM_WITH?=	# "--with sqlite"
 
 all:
 	@ echo "targets"
@@ -13,7 +14,7 @@ prepare:
 
 rpm: prepare
 	tar czpvf SOURCES/$(PROJ).tar.gz ../src
-	rpmbuild -ba -v --define "_topdir ${PWD}" SPECS/$(PROJ).spec
+	rpmbuild -ba -v --define "_topdir ${PWD}" ${RPM_WITH} SPECS/$(PROJ).spec
 	@ echo && printf "\x1B[32mRPM packages:\033[0m\n" && ls -1 RPMS/*
 
 deb: prepare

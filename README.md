@@ -101,9 +101,12 @@ simplicity.
 
 ## Dependencies
 
+Mandatory:
 - OpenSSL 1.1 or newer
-- FUSE (libfuse and system support)
+- FUSE (libfuse and/or system support)
 - libcurl
+
+Optional:
 - libreadline
 - sqlite3 3.23 or newer with `SQLITE_ENABLE_DESERIALIZE` enabled
 
