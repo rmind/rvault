@@ -522,5 +522,6 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg, bool debug)
 	fuse_unmount(mountpoint, chan);
 #endif
 	fuse_destroy(fuse);
+	fuse_opt_free_args(&args);
 	return ret;
 }

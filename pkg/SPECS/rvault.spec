@@ -26,8 +26,9 @@ BuildRequires:	sqlite-devel
 
 Requires:	openssl-libs
 Requires:	libscrypt
-Requires:	fuse-libs
 Requires:	libcurl
+Requires:	fuse-libs
+Requires:	fuse
 %if %{with sqlite}
 Requires:	readline
 Requires:	sqlite-libs

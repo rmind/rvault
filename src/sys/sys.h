@@ -12,6 +12,10 @@
 #define	O_SYNC		0	// Darwin
 #endif
 
+#ifndef O_DSYNC
+#define	O_DSYNC		0	// Darwin
+#endif
+
 ssize_t		fs_block_size(const char *);
 ssize_t		fs_file_size(int);
 ssize_t		fs_read(int, void *, size_t);

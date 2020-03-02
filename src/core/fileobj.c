@@ -52,6 +52,7 @@ struct fileobj {
 #define	FOBJ_INMEM		0x01	// data in-memory
 #define	FOBJ_DIRTY		0x02	// data needs to be synced
 #define	FOBJ_NEED_FSYNC		0x04	// need a full fsync()
+#define	FOBJ_ALWAYS_FSYNC	0x08	// always sync / O_SYNC
 
 #define	FOBJ_MIN_SYNC_TIME	3	// in seconds
 
@@ -73,6 +74,10 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 	fobj->vault = vault;
 	LIST_INSERT_HEAD(&vault->file_list, fobj, entry);
 	vault->file_count++;
+
+	if ((flags & (O_SYNC|O_DSYNC)) != 0 || !vault->weak_sync) {
+		fobj->flags |= FOBJ_ALWAYS_FSYNC;
+	}
 
 	/*
 	 * Open the data file.
@@ -308,7 +313,6 @@ ssize_t
 fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 {
 	uint64_t endoff;
-	time_t now;
 
 	endoff = offset + len - 1;
 	if (offset < 0 || endoff < (uint64_t)offset || endoff > SIZE_MAX) {
@@ -370,14 +374,19 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
 	    __func__, fobj, (intmax_t)offset, len);
 
-	/*
-	 * Sync if more than N seconds passed since the last write.
-	 */
-	now = time(NULL);
-	if ((now - fobj->last_stime) > FOBJ_MIN_SYNC_TIME) {
-		if (fileobj_sync(fobj, FOBJ_WRITEBACK) == 0) {
-			fobj->last_stime = now;
+	if ((fobj->flags & FOBJ_ALWAYS_FSYNC) == 0) {
+		/*
+		 * Sync if more than N seconds passed since the last write.
+		 */
+		const time_t now = time(NULL);
+
+		if ((now - fobj->last_stime) > FOBJ_MIN_SYNC_TIME) {
+			if (fileobj_sync(fobj, FOBJ_WRITEBACK) == 0) {
+				fobj->last_stime = now;
+			}
 		}
+	} else {
+		fileobj_sync(fobj, FOBJ_FULLSYNC);
 	}
 
 	return (size_t)len;
