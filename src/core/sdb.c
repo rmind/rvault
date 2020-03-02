@@ -25,8 +25,6 @@
 #error need sqlite 3.23 or newer
 #endif
 
-#define	SDB_META_FILE		"rvault.sdb"
-
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef struct {
@@ -70,7 +68,7 @@ sdb_open(rvault_t *vault)
 	/*
 	 * Open the SDB file, decrypt and load the data into a buffer.
 	 */
-	if (asprintf(&fpath, "%s/%s", vault->base_path, SDB_META_FILE) == -1) {
+	if (asprintf(&fpath, "%s/%s", vault->base_path, RVAULT_SDB_FILE) == -1) {
 		return NULL;
 	}
 	fd = open(fpath, O_CREAT | O_RDWR, 0600);

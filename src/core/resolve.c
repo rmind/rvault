@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -12,6 +12,7 @@
 #include <errno.h>
 
 #include "rvault.h"
+#include "storage.h"
 #include "utils.h"
 
 /*
@@ -52,38 +53,40 @@ err:
 	return -1;
 }
 
-static ssize_t
+static int
 get_path_component(rvault_t *vault, const char *pc, size_t len, FILE *fp)
 {
 	unsigned char buf[PATH_MAX + 1];
-	ssize_t ret, nbytes;
+	ssize_t ret;
 
 	if (!vault->crypto) {
 		/* For testing purposes. */
 		return fprintf(fp, "%.*s", (int)len, pc);
+	}
+	if (fputs(RVAULT_FOBJ_PREF, fp) == EOF) {
+		return -1;
 	}
 	if (crypto_get_buflen(vault->crypto, len) > sizeof(buf)) {
 		errno = ENAMETOOLONG;
 		return -1;
 	}
 	ret = crypto_encrypt(vault->crypto, pc, len, buf, sizeof(buf));
-	if (ret == -1 || (nbytes = hex_write(fp, buf, ret)) < 0) {
+	if (ret == -1 || hex_write(fp, buf, ret) == -1) {
 		return -1;
 	}
 	if (crypto_get_taglen(vault->crypto)) {
 		size_t tag_len;
 		const void *tag;
 
-		if (fputc(':', fp) < 0) {
+		if (fputc(':', fp) == EOF) {
 			return -1;
 		}
 		tag = crypto_get_tag(vault->crypto, &tag_len);
-		if ((ret = hex_write(fp, tag, tag_len)) < 0) {
+		if (hex_write(fp, tag, tag_len) == -1) {
 			return -1;
 		}
-		nbytes += tag_len;
 	}
-	return nbytes;
+	return 0;
 }
 
 /*
@@ -99,7 +102,7 @@ local_strchrnul(const char *p, int ch)
 }
 
 /*
- * rvault_resolve_path: resolve the plain path within the vault namespace,
+ * rvault_resolve_path: resolve a plain path within the vault namespace,
  * returning an absolute path to the encrypted file object.
  *
  * => Allocates memory and returns the path; the caller must free it.
@@ -145,7 +148,7 @@ rvault_resolve_path(rvault_t *vault, const char *path, size_t *rlen)
 			}
 			continue;
 		}
-		if (fputs("/", fp) < 0) {
+		if (fputs("/", fp) == EOF) {
 			goto err;
 		}
 		if (get_path_component(vault, pc, pclen, fp) == -1) {
@@ -157,7 +160,7 @@ rvault_resolve_path(rvault_t *vault, const char *path, size_t *rlen)
 	 * Force NUL terminator as the cursor might have been rewound.
 	 * Finally, flush before accessing the buffer.
 	 */
-	if (fputc('\0', fp) < 0 || fflush(fp) != 0) {
+	if (fputc('\0', fp) == EOF || fflush(fp) != 0) {
 		goto err;
 	}
 
@@ -190,6 +193,12 @@ rvault_resolve_vname(rvault_t *vault, const char *vname, size_t *rlen)
 	size_t blen, len, tlen;
 	char *name = NULL;
 	ssize_t nbytes;
+
+	if (strncmp(vname, RVAULT_FOBJ_PREF, RVAULT_FOBJ_PREFLEN) != 0) {
+		errno = EINVAL;
+		return NULL;
+	}
+	vname += RVAULT_FOBJ_PREFLEN;
 
 	if (rvault_unhex_aedata(vname, &buf, &len, &tag, &tlen) == -1) {
 		goto err;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -16,9 +16,10 @@
 
 #define	RVAULT_ABI_VER		1
 #define	RVAULT_META_FILE	"rvault.metadata"
+#define	RVAULT_SDB_FILE		"rvault.sdb"
 
-#define	RVAULT_META_PREF	"rvault."
-#define	RVAULT_META_PREFLEN	(sizeof(RVAULT_META_PREF) - 1)
+#define	RVAULT_FOBJ_PREF	"RV:"
+#define	RVAULT_FOBJ_PREFLEN	(sizeof(RVAULT_FOBJ_PREF) - 1)
 
 #define	STORAGE_ALIGNMENT	UINT64_C(8)
 #define	STORAGE_ALIGN(x)	roundup2((size_t)(x), STORAGE_ALIGNMENT)

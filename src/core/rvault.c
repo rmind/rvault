@@ -586,10 +586,13 @@ rvault_iter_dir(rvault_t *vault, const char *path,
 			continue;
 		}
 
-		if (vname[0] == '.') {
-			continue;
-		}
-		if (!strncmp(vname, RVAULT_META_PREF, RVAULT_META_PREFLEN)) {
+		/*
+		 * Skip any files which do not have rvault prefix.  This is
+		 * primarily because other applications or the user might,
+		 * for whatever reason, litter in the vault directory, e.g.
+		 * there may be temporary/hidden files.
+		 */
+		if (strncmp(vname, RVAULT_FOBJ_PREF, RVAULT_FOBJ_PREFLEN)) {
 			continue;
 		}
 
