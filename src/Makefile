@@ -48,6 +48,7 @@ endif
 
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
+USE_SQLITE?=	1
 endif
 ifeq ($(SYSNAME),NetBSD)
 CFLAGS+=	-D_NETBSD_SOURCE -D_KERNTYPES
@@ -82,12 +83,15 @@ endif
 # Dependencies: compiler flags and libraries to link.
 #
 
+ifdef USE_SQLITE
 SQLITE3_SERIALIZE:=	$(shell echo '\
     \#include <stdio.h>\n\
     \#include <sqlite3.h>\n\
     int main() { sqlite3_serialize(NULL, "", NULL, 0); return 0; }' | \
     $(CC) -o /dev/null -xc -lsqlite3 - \
     >/dev/null 2>/dev/null && echo 1 || echo 0)
+USE_SQLITE=	$(SQLITE3_SERIALIZE)
+endif
 
 ifeq ($(SYSNAME),Darwin)
 # FIXME/XXX
@@ -109,11 +113,10 @@ LDFLAGS+=	-lscrypt-kdf
 else
 LDFLAGS+=	-lscrypt
 endif
-LDFLAGS+=	-lssl -lcrypto
-LDFLAGS+=	-lcurl -lreadline
-ifeq ($(SQLITE3_SERIALIZE),1)
+LDFLAGS+=	-lssl -lcrypto -lcurl
+ifeq ($(USE_SQLITE),1)
 CFLAGS+=	-DSQLITE3_SERIALIZE
-LDFLAGS+=	-lsqlite3
+LDFLAGS+=	-lsqlite3 -lreadline
 endif
 
 #
@@ -127,7 +130,7 @@ OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
 OBJS+=		core/http_req.o
 OBJS+=		core/recovery.o
-ifeq ($(SQLITE3_SERIALIZE),1)
+ifeq ($(USE_SQLITE),1)
 OBJS+=		core/sdb.o
 endif
 OBJS+=		fuse/rvaultfs.o

@@ -1,4 +1,5 @@
 %define version	%(cat %{_topdir}/version.txt)
+%bcond_with sqlite
 
 Name:		rvault
 Version:	%{version}
@@ -18,15 +19,19 @@ BuildRequires:	openssl-devel
 BuildRequires:	libscrypt-devel
 BuildRequires:	fuse-devel
 BuildRequires:	libcurl-devel
+%if %{with sqlite}
 BuildRequires:	readline-devel
 BuildRequires:	sqlite-devel
+%endif
 
 Requires:	openssl-libs
 Requires:	libscrypt
 Requires:	fuse-libs
 Requires:	libcurl
+%if %{with sqlite}
 Requires:	readline
 Requires:	sqlite-libs
+%endif
 
 %description
 
@@ -42,8 +47,7 @@ distributed under the 2-clause BSD license.
 make clean && make tests
 
 %build
-make clean && make %{?_smp_mflags}
-# make %{?_smp_mflags} lib LIBDIR=%{_libdir}
+make clean && make %{?_smp_mflags} %{?with_sqlite:USE_SQLITE=1}
 
 %install
 make install \
