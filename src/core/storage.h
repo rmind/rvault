@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -14,7 +14,7 @@
  * rvault storage ABI.
  */
 
-#define	RVAULT_ABI_VER		1
+#define	RVAULT_ABI_VER		2
 #define	RVAULT_META_FILE	"rvault.metadata"
 
 #define	RVAULT_META_PREF	"rvault."
@@ -44,6 +44,7 @@ typedef struct {
 	uint8_t		flags;
 	uint8_t		kp_len;
 	uint16_t	iv_len;
+	uint16_t	reserved;
 	uint8_t		uid[16];
 } __attribute__((packed)) rvault_hdr_t;
 
