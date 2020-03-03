@@ -32,6 +32,7 @@ osx-pkg: prepare
 	    --identifier eu.noxt.$(PROJ).pkg \
 	    --version $(shell cat version.txt) \
 	    --ownership recommended \
+	    --scripts macos \
 	    $(PROJ)-$(shell cat version.txt).pkg
 	@ echo && printf "\x1B[32mDEB packages:\033[0m\n" && ls -1 *.pkg
 
