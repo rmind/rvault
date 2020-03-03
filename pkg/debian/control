@@ -7,7 +7,7 @@ Build-Depends:
  libssl-dev,
  libscrypt-dev,
  libfuse-dev,
- libcurl4,
+ libcurl4-dev,
  libreadline-dev,
  libsqlite3-dev
 Standards-Version: 3.9.1

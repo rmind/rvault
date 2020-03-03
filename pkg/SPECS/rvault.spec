@@ -44,9 +44,6 @@ distributed under the 2-clause BSD license.
 %prep
 %setup -q -n src
 
-%check
-make clean && make tests
-
 %build
 make clean && make %{?_smp_mflags} %{?with_sqlite:USE_SQLITE=1}
 
