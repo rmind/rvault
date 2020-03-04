@@ -118,9 +118,14 @@ rvaultfs_open_raw(const char *path, struct fuse_file_info *fi, mode_t mode)
 		return -errno;
 	}
 
-	/* Just use direct I/O i.e. bypass page cache. */
+	/*
+	 * Use direct I/O i.e. bypass the page cache for extra security.
+	 * This causes abnormal behaviour on Darwin, though; we use the
+	 * '-noubc' parameter there instead.
+	 */
+#if !defined(__APPLE__)
 	fi->direct_io = true;
-	fi->keep_cache = false;
+#endif
 
 	/* Associate the file object with the FUSE file handle. */
 	static_assert(sizeof(fi->fh) >= sizeof(uintptr_t),
