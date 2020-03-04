@@ -10,6 +10,10 @@ as a filesystem in userspace.
 It is written in C11 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
 
+## Download
+
+Download the latest version from the [releases](https://github.com/rmind/rvault/releases/latest) page.
+
 ## Features
 
 Key features and cryptography:
