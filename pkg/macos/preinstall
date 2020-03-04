@@ -1,0 +1,53 @@
+#!/bin/sh
+
+set -eu
+
+log_file="$HOME/Library/Logs/rvault-installer.log"
+
+error_msg()
+{
+	local title="An error has occurred."
+	local msg="$1"
+
+	echo "display alert \"$title\" message \"$msg\" as critical" | \
+	    osascript > /dev/null || true
+	(date; echo "$msg") > $log_file 2>&1 || true
+	exit 1
+}
+
+error_dep_msg()
+{
+	local msg=$(cat <<-EOF
+	The following dependencies are needed by rvault:
+
+	$1 FUSE for macOS: https://osxfuse.github.io
+
+	$2 Homebrew package manager: https://brew.sh/
+
+	Please follow the installation instructions on these web sites.
+
+	Additionally, the following Homebrew packages are required:
+
+	$3 OpenSSL 1.1: brew install openssl
+
+	$4 libscrypt: brew install libscrypt
+
+	Run the commands above to install them.
+	EOF
+	)
+	error_msg "$msg"
+}
+
+# ✓ ✘ •
+failed=""
+d1="✓"; d2="✓"; d3="✓"; d4="✓";
+
+test -f "/usr/local/lib/libosxfuse.2.dylib" || { failed=1; d1="✘"; }
+test -f "/usr/local/bin/brew" || { d2="✘"; }
+test -d "/usr/local/opt/openssl@1.1/" || { failed=1; d3="✘"; }
+test -f "/usr/local/opt/libscrypt/lib/libscrypt.0.dylib" || { failed=1; d4="✘"; }
+
+[ -z "$failed" ] || {
+	error_dep_msg "$d1" "$d2" "$d3" "$d4";
+	exit 1;
+}
