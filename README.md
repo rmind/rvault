@@ -10,10 +10,6 @@ as a filesystem in userspace.
 It is written in C11 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
 
-## Download
-
-Download the latest version from the [releases](https://github.com/rmind/rvault/releases/latest) page.
-
 ## Features
 
 Key features and cryptography:
@@ -34,6 +30,10 @@ for the key derivation function
 Lightweight code base, easy to audit, minimum dependencies, has many unit tests,
 [ASan](https://en.wikipedia.org/wiki/AddressSanitizer) and
 UBSan enabled, supports different CPU architectures.
+
+## Download
+
+Download the latest packages from the [releases](https://github.com/rmind/rvault/releases/latest) page.
 
 ## Usage
 
@@ -114,7 +114,11 @@ Optional:
 - libreadline
 - sqlite3 3.23 or newer with `SQLITE_ENABLE_DESERIALIZE` enabled
 
-## Packages
+## Building
+
+To build from source:
+* Regular build: `cd src && make`
+* Debug build and running of tests: `make clean && make debug`
 
 To build the packages:
 * RPM (tested on RHEL/CentOS 8): `cd pkg && make rpm`
