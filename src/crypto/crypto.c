@@ -95,18 +95,43 @@ crypto_cipher_id(const char *cipher)
 crypto_t *
 crypto_create(crypto_cipher_t c)
 {
+	const char *crypto_lib = getenv("RVAULT_CRYPTO_LIB");
+	const crypto_ops_t *crypto_ops = NULL;
 	crypto_t *crypto;
+
+	/*
+	 * Use the chosen crypto library; otherwise, just pick the first one.
+	 */
+	if (crypto_lib) {
+		for (unsigned i = 0; i < crypto_engines_count; i++) {
+			const cipher_engine_t *eng = &crypto_engines[i];
+
+			if (strcmp(eng->name, crypto_lib) == 0) {
+				crypto_ops = eng->ops;
+				break;
+			}
+		}
+	} else if (crypto_engines_count) {
+		crypto_ops = crypto_engines[0].ops;
+	}
+	if (crypto_ops == NULL) {
+		errno = ENOTSUP;
+		return NULL;
+	}
 
 	if ((crypto = calloc(1, sizeof(crypto_t))) == NULL) {
 		return NULL;
 	}
 	crypto->cipher = c;
-	if ((crypto->ops = crypto_engines[0].ops) == NULL) { // FIXME
-		goto err;
-	}
+	crypto->ops = crypto_ops;
+
 	if (crypto->ops->create(crypto) == -1) {
 		goto err;
 	}
+	if (crypto->tlen && (crypto->tag = malloc(crypto->tlen)) == NULL) {
+		goto err;
+	}
+
 	return crypto;
 err:
 	crypto_destroy(crypto);
@@ -275,6 +300,10 @@ crypto_encrypt(const crypto_t *crypto, const void *inbuf, size_t inlen,
 		errno = EINVAL;
 		return -1;
 	}
+	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
+		errno = EINVAL;
+		return -1;
+	}
 	return crypto->ops->encrypt(crypto, inbuf, inlen, outbuf, outlen);
 }
 
@@ -293,7 +322,28 @@ crypto_decrypt(const crypto_t *crypto, const void *inbuf, size_t inlen,
 		errno = EINVAL;
 		return -1;
 	}
+	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
+		errno = EINVAL;
+		return -1;
+	}
 	return crypto->ops->decrypt(crypto, inbuf, inlen, outbuf, outlen);
+}
+
+/*
+ * crypto_hmac: perform HMAC using a given algorithm.
+ *
+ * => Use with the MAC-then-Encrypt (MtE) scheme.
+ * => Returns the number of bytes produced or -1 on error.
+ */
+ssize_t
+crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
+    unsigned char buf[static HMAC_MAX_BUFLEN])
+{
+	if (dlen > INT_MAX) {
+		errno = EFBIG;
+		return -1;
+	}
+	return crypto->ops->hmac(crypto, data, dlen, buf);
 }
 
 void

@@ -24,6 +24,9 @@ typedef enum {
 #define	CRYPTO_CIPHER_PRIMARY	AES_256_GCM
 #define	CRYPTO_CIPHER_SECONDARY	CHACHA20_POLY1305
 
+#define	HMAC_MAX_BUFLEN		64
+#define	HMAC_SHA3_256_BUFLEN	32
+
 typedef struct crypto crypto_t;
 
 #ifdef __CRYPTO_PRIVATE
@@ -37,6 +40,8 @@ typedef struct crypto_ops {
 			    size_t, void *, size_t);
 	ssize_t		(*decrypt)(const crypto_t *, const void *,
 			    size_t, void *, size_t);
+	ssize_t		(*hmac)(const crypto_t *, const void *, size_t,
+			    unsigned char [static HMAC_MAX_BUFLEN]);
 } crypto_ops_t;
 
 struct crypto {
@@ -109,9 +114,7 @@ ssize_t		crypto_decrypt(const crypto_t *, const void *, size_t,
  * HMAC API.
  */
 
-#define	HMAC_SHA3_256_BUFLEN	32
-
-ssize_t		hmac_sha3_256(const void *, size_t, const void *, size_t,
-		    unsigned char [static HMAC_SHA3_256_BUFLEN]);
+ssize_t		crypto_hmac(const crypto_t *, const void *, size_t,
+		    unsigned char [static HMAC_MAX_BUFLEN]);
 
 #endif

@@ -117,6 +117,7 @@ fileobj_dataload(fileobj_t *fobj)
 		app_elog(LOG_ERR, "%s: storage_read_data() failed", __func__);
 		return -1;
 	}
+	ASSERT(fobj->len == 0 || fobj->sbuf.buf);
 	fobj->len = nbytes;
 	fobj->flags |= FOBJ_INMEM;
 	return 0;

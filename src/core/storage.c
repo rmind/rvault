@@ -86,15 +86,9 @@ sbuffer_free(sbuffer_t *sbuf)
 
 static int
 storage_hmac_compute(rvault_t *vault, const void *buf, size_t len,
-    uint8_t hmac[static HMAC_SHA3_256_BUFLEN])
+    uint8_t hmac[static HMAC_MAX_BUFLEN])
 {
-	const void *key;
-	size_t key_len;
-
-	key = crypto_get_key(vault->crypto, &key_len);
-	ASSERT(key != NULL);
-
-	return hmac_sha3_256(key, key_len, buf, len, hmac) == -1 ? -1 : 0;
+	return crypto_hmac(vault->crypto, buf, len, hmac);
 }
 
 static int
@@ -102,7 +96,7 @@ storage_hmac_verify(rvault_t *vault, const void *buf, size_t len,
     const fileobj_hdr_t *hdr)
 {
 	const void *hmac_onfile = FILEOBJ_HDR_TO_AETAG(hdr);
-	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
+	uint8_t hmac[HMAC_MAX_BUFLEN];
 
 	if (FILEOBJ_AETAG_LEN(hdr) != HMAC_SHA3_256_BUFLEN) {
 		return -1;
@@ -126,7 +120,7 @@ storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 {
 	fileobj_hdr_t *hdr;
 	size_t max_buf_len, file_len, tag_len, enc_len;
-	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
+	uint8_t hmac[HMAC_MAX_BUFLEN];
 	const void *tag;
 	void *enc_buf;
 	ssize_t nbytes;
