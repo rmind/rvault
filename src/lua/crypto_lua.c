@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -10,7 +10,6 @@
  *
  * TODO:
  * - Wrap the IV and key into userdata; explicitly zero the key on free.
- * - Perhaps de-duplicate lua_crypto_encrypt() and lua_crypto_decrypt()?
  */
 
 #include <stdlib.h>
@@ -29,6 +28,8 @@ static int	lua_crypto_gen_iv(lua_State *);
 static int	lua_crypto_gen_key(lua_State *);
 static int	lua_crypto_set_iv(lua_State *);
 static int	lua_crypto_set_key(lua_State *);
+static int	lua_crypto_set_tag(lua_State *);
+static int	lua_crypto_get_tag(lua_State *);
 static int	lua_crypto_encrypt(lua_State *);
 static int	lua_crypto_decrypt(lua_State *);
 
@@ -41,8 +42,12 @@ static const struct luaL_Reg crypto_lib_methods[] = {
 static const struct luaL_Reg crypto_methods[] = {
 	{ "gen_iv",		lua_crypto_gen_iv	},
 	{ "gen_key",		lua_crypto_gen_key	},
+
 	{ "set_iv",		lua_crypto_set_iv	},
 	{ "set_key",		lua_crypto_set_key	},
+	{ "set_tag",		lua_crypto_set_tag	},
+
+	{ "get_tag",		lua_crypto_get_tag	},
 
 	/* Encrypt/decrypt. */
 	{ "encrypt",		lua_crypto_encrypt	},
@@ -211,6 +216,36 @@ lua_crypto_set_key(lua_State *L)
 		return 0;
 	}
 	return 0;
+}
+
+static int
+lua_crypto_set_tag(lua_State *L)
+{
+	crypto_lua_t *lctx = lua_crypto_getctx(L);
+	const void *buf;
+	size_t len;
+
+	buf = lua_tolstring(L, 2, &len);
+	luaL_argcheck(L, buf, 2, "binary `string' expected");
+	if (crypto_set_tag(lctx->crypto, buf, len) == -1) {
+		luaL_error(L, "OOM");
+		return 0;
+	}
+	return 0;
+}
+
+static int
+lua_crypto_get_tag(lua_State *L)
+{
+	crypto_lua_t *lctx = lua_crypto_getctx(L);
+	const void *tag;
+	size_t len;
+
+	if ((tag = crypto_get_tag(lctx->crypto, &len)) == NULL) {
+		return 0;
+	}
+	lua_pushlstring(L, tag, len);
+	return 1;
 }
 
 /*
