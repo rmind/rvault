@@ -19,9 +19,8 @@ static void
 test_basic(rvault_t *vault)
 {
 	const int fd = mock_get_tmpfile(NULL);
-	ssize_t nbytes, file_len;
-	size_t len;
-	void *buf;
+	ssize_t nbytes, file_len, len;
+	sbuffer_t sbuf;
 
 	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
 	assert(nbytes > 0);
@@ -29,10 +28,12 @@ test_basic(rvault_t *vault)
 	file_len = fs_file_size(fd);
 	assert(file_len == nbytes);
 
-	buf = storage_read_data(vault, fd, file_len, &len);
-	assert(buf != NULL);
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+	len = storage_read_data(vault, fd, file_len, &sbuf);
 	assert(len == TEST_TEXT_LEN);
-	sbuffer_free(buf, len);
+
+	assert(strncmp(sbuf.buf, TEST_TEXT, TEST_TEXT_LEN) == 0);
+	sbuffer_free(&sbuf);
 
 	close(fd);
 }
@@ -41,9 +42,8 @@ static void
 test_corrupted(rvault_t *vault)
 {
 	const int fd = mock_get_tmpfile(NULL);
-	ssize_t nbytes, file_len;
-	size_t len;
-	void *buf;
+	ssize_t nbytes, file_len, len;
+	sbuffer_t sbuf;
 
 	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
 	file_len = fs_file_size(fd);
@@ -51,8 +51,9 @@ test_corrupted(rvault_t *vault)
 
 	mock_corrupt_byte_at(fd, file_len - 1, NULL);
 
-	buf = storage_read_data(vault, fd, file_len, &len);
-	assert(buf == NULL);
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+	len = storage_read_data(vault, fd, file_len, &sbuf);
+	assert(len == -1);
 	close(fd);
 }
 

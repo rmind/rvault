@@ -59,9 +59,8 @@ sdb_open(rvault_t *vault)
 {
 	sdb_t *sdb = NULL;
 	sqlite3 *db = NULL;
-	void *buf = NULL;
-	size_t len = 0;
-	ssize_t flen;
+	ssize_t len = 0, flen;
+	sbuffer_t sbuf;
 	char *fpath;
 	int fd;
 
@@ -79,7 +78,9 @@ sdb_open(rvault_t *vault)
 	if ((flen = fs_file_size(fd)) == -1) {
 		goto out;
 	}
-	if (flen && (buf = storage_read_data(vault, fd, flen, &len)) == NULL) {
+
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+	if (flen && (len = storage_read_data(vault, fd, flen, &sbuf)) == -1) {
 		goto out;
 	}
 
@@ -91,15 +92,15 @@ sdb_open(rvault_t *vault)
 	if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
 		goto out;
 	}
-	if (buf) {
+	if (sbuf.buf) {
 		void *db_buf;
 
 		app_log(LOG_DEBUG, "%s: loading the database", __func__);
 		if ((db_buf = sqlite3_malloc64(len)) == NULL) {
 			goto out;
 		}
-		memcpy(db_buf, buf, len);
-		sbuffer_free(buf, len);
+		memcpy(db_buf, sbuf.buf, len);
+		sbuffer_free(&sbuf);
 
 		/*
 		 * Note: if sqlite3_deserialize() fails, it will free the
