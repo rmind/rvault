@@ -33,7 +33,7 @@ get_section(const char *line)
 static int
 fill_section(rsection_t *sec, void *buf, size_t len)
 {
-	if (!sec->buf && (sec->buf = sbuffer_alloc(sec->bufsize)) == NULL) {
+	if (!sec->buf && (sec->buf = calloc(1, sec->bufsize)) == NULL) {
 		app_elog(LOG_ERR, "malloc() failed");
 		return -1;
 	}
@@ -153,7 +153,8 @@ rvault_recovery_release(rsection_t *sections)
 		rsection_t *sec = &sections[i];
 
 		if (sec->buf) {
-			sbuffer_free(sec->buf, sec->bufsize);
+			crypto_memzero(sec->buf, sec->bufsize);
+			free(sec->buf);
 		}
 	}
 	free(sections);

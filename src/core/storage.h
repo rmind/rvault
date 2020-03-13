@@ -103,12 +103,25 @@ typedef struct {
 
 #define	FILEOBJ_FILE_LEN(h)	(FILEOBJ_HMAC_DATALEN(h) + (h)->aetag_len)
 
-int	storage_write_data(rvault_t *, int, const void *, size_t);
-void *	storage_read_data(rvault_t *, int, size_t, size_t *);
-ssize_t	storage_read_length(rvault_t *, int);
+/*
+ * "Safe-buffer" API.
+ */
 
-void *	sbuffer_alloc(size_t);
-void *	sbuffer_move(void *, size_t, size_t);
-void	sbuffer_free(void *, size_t);
+typedef struct {
+	void *	buf;		// buffer address
+	size_t	buf_size;	// buffer (allocation) size
+} sbuffer_t;
+
+void *	sbuffer_alloc(sbuffer_t *, size_t);
+void *	sbuffer_move(sbuffer_t *, size_t);
+void	sbuffer_free(sbuffer_t *);
+
+/*
+ * Storage API.
+ */
+
+ssize_t	storage_write_data(rvault_t *, int, const void *, size_t);
+ssize_t	storage_read_data(rvault_t *, int, size_t, sbuffer_t *);
+ssize_t	storage_read_length(rvault_t *, int);
 
 #endif

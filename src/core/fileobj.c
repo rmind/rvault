@@ -38,8 +38,7 @@ struct fileobj {
 	size_t		pathlen;
 
 	/* In-memory buffer, allocation size and data length. */
-	unsigned char *	buf;
-	size_t		buf_size;
+	sbuffer_t	sbuf;
 	size_t		len;
 
 	/* Last sync time. */
@@ -95,7 +94,7 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 static int
 fileobj_dataload(fileobj_t *fobj)
 {
-	ssize_t flen;
+	ssize_t flen, nbytes;
 
 	if (fobj->flags & FOBJ_INMEM) {
 		return 0;
@@ -113,9 +112,12 @@ fileobj_dataload(fileobj_t *fobj)
 	 * Initial load of the data into the memory.
 	 * Note: may return an empty buffer (if zero size)
 	 */
-	fobj->buf = storage_read_data(fobj->vault, fobj->fd, flen, &fobj->len);
-	ASSERT(fobj->buf || fobj->len == 0);
-	fobj->buf_size = fobj->len;
+	nbytes = storage_read_data(fobj->vault, fobj->fd, flen, &fobj->sbuf);
+	if (nbytes == -1) {
+		app_elog(LOG_ERR, "%s: storage_read_data() failed", __func__);
+		return -1;
+	}
+	fobj->len = nbytes;
 	fobj->flags |= FOBJ_INMEM;
 	return 0;
 }
@@ -140,8 +142,7 @@ fileobj_sync(fileobj_t *fobj, int stype)
 	/*
 	 * If truncating, then just wipe the whole file.
 	 */
-	if (!fobj->buf) {
-		ASSERT(fobj->len == 0);
+	if (fobj->len == 0) {
 		if (ftruncate(fobj->fd, 0) == -1) {
 			return -1;
 		}
@@ -165,7 +166,7 @@ fileobj_sync(fileobj_t *fobj, int stype)
 	 *
 	 * Note: must sync the directory too.
 	 */
-	if (storage_write_data(vault, fd, fobj->buf, fobj->len) == -1) {
+	if (storage_write_data(vault, fd, fobj->sbuf.buf, fobj->len) == -1) {
 		app_elog(LOG_DEBUG, "%s: storage_write_data() failed", __func__);
 		errno = EIO;
 		goto err;
@@ -273,10 +274,10 @@ fileobj_close(fileobj_t *fobj)
 		crypto_memzero(fobj->vpath, fobj->pathlen);
 		free(fobj->vpath);
 	}
-	if (fobj->buf) {
-		ASSERT(fobj->len > 0);
-		ASSERT(fobj->buf_size >= fobj->len);
-		sbuffer_free(fobj->buf, fobj->buf_size);
+	if (fobj->len) {
+		ASSERT(fobj->sbuf.buf != NULL);
+		ASSERT(fobj->sbuf.buf_size >= fobj->len);
+		sbuffer_free(&fobj->sbuf);
 	}
 	if (fobj->fd > 0) {
 		close(fobj->fd);
@@ -288,6 +289,7 @@ ssize_t
 fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 {
 	size_t nbytes;
+	uint8_t *fbuf;
 
 	if (offset < 0) {
 		errno = EINVAL;
@@ -297,12 +299,13 @@ fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 		errno = EIO;
 		return -1;
 	}
-	if (fobj->buf == NULL || offset >= (off_t)fobj->len) {
+	if (fobj->len == 0 || offset >= (off_t)fobj->len) {
 		return 0;
 	}
 
+	fbuf = fobj->sbuf.buf;
 	nbytes = MIN(fobj->len - offset, len);
-	memcpy(buf, &fobj->buf[offset], nbytes);
+	memcpy(buf, &fbuf[offset], nbytes);
 
 	app_log(LOG_DEBUG, "%s: vnode %p, read [%jd:%zu] -> %zd",
 	    __func__, fobj, (intmax_t)offset, len, nbytes);
@@ -313,6 +316,7 @@ ssize_t
 fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 {
 	uint64_t endoff;
+	uint8_t *fbuf;
 
 	endoff = offset + len - 1;
 	if (offset < 0 || endoff < (uint64_t)offset || endoff > SIZE_MAX) {
@@ -338,7 +342,7 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 		 * If we have enough space since the previous expansion,
 		 * then merely bump the data length.
 		 */
-		if (endoff >= fobj->buf_size) {
+		if (endoff >= fobj->sbuf.buf_size) {
 			size_t buf_size;
 			void *nbuf;
 
@@ -353,22 +357,21 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 			app_log(LOG_DEBUG, "%s: vnode %p, grow to [%zu]",
 			    __func__, fobj, buf_size);
 
-			nbuf = sbuffer_move(fobj->buf, fobj->len, buf_size);
+			nbuf = sbuffer_move(&fobj->sbuf, buf_size);
 			if (nbuf == NULL) {
 				errno = ENOMEM;
 				return -1;
 			}
-			fobj->buf = nbuf;
-			fobj->buf_size = buf_size;
 		}
 		fobj->len = nlen;
 	}
-	ASSERT(fobj->buf != NULL);
+	fbuf = fobj->sbuf.buf;
+	ASSERT(fbuf != NULL);
 
 	/*
 	 * Write the data to the buffer.
 	 */
-	memcpy(&fobj->buf[offset], buf, len);
+	memcpy(&fbuf[offset], buf, len);
 	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 
 	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
@@ -400,15 +403,13 @@ fileobj_getsize(fileobj_t *fobj)
 		errno = EIO;
 		return -1;
 	}
-	ASSERT(fobj->buf || fobj->len == 0);
+	ASSERT(fobj->len == 0 || fobj->sbuf.buf);
 	return fobj->len;
 }
 
 int
 fileobj_setsize(fileobj_t *fobj, size_t len)
 {
-	void *buf = NULL;
-
 	if (fileobj_dataload(fobj) == -1) {
 		app_elog(LOG_DEBUG, "%s: fileobj_dataload() failed", __func__);
 		errno = EIO;
@@ -419,11 +420,10 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	 * Note: if new length is zero, then sbuffer_move() will free the
 	 * old buffer and will return NULL.
 	 */
-	if (len && (buf = sbuffer_move(fobj->buf, fobj->len, len)) == NULL) {
+	if (len && sbuffer_move(&fobj->sbuf, len) == NULL) {
 		app_elog(LOG_DEBUG, "%s: sbuffer_move() failed", __func__);
 		return -1;
 	}
-	fobj->buf = buf;
 	fobj->len = len;
 	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 

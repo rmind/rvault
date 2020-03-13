@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -29,38 +29,55 @@
  */
 
 void *
-sbuffer_alloc(size_t len)
+sbuffer_alloc(sbuffer_t *sbuf, size_t len)
 {
-	return safe_mmap(len, -1, MMAP_WRITEABLE);
+	void *buf;
+
+	buf = safe_mmap(len, -1, MMAP_WRITEABLE);
+	if (!buf) {
+		return NULL;
+	}
+	sbuf->buf = buf;
+	sbuf->buf_size = len;
+	return buf;
 }
 
 void *
-sbuffer_move(void *buf, size_t len, size_t newlen)
+sbuffer_move(sbuffer_t *sbuf, size_t newlen)
 {
 	void *nbuf = NULL;
 
-	if (newlen && (nbuf = sbuffer_alloc(newlen)) == NULL) {
-		return NULL;
+	if (sbuf->buf_size == newlen) {
+		return sbuf->buf;
 	}
-	if (buf) {
-		ASSERT(len > 0);
+	if (newlen) {
+		if ((nbuf = safe_mmap(newlen, -1, MMAP_WRITEABLE)) == NULL) {
+			return NULL;
+		}
+	}
+	if (sbuf->buf) {
+		ASSERT(sbuf->buf_size > 0);
 		if (nbuf) {
 			ASSERT(newlen > 0);
-			memcpy(nbuf, buf, MIN(len, newlen));
+			memcpy(nbuf, sbuf->buf, MIN(sbuf->buf_size, newlen));
 		} else {
 			ASSERT(newlen == 0);
 		}
-		sbuffer_free(buf, len);
+		safe_munmap(sbuf->buf, sbuf->buf_size, MMAP_ERASE);
 	} else {
-		ASSERT(len == 0);
+		ASSERT(sbuf->buf_size == 0);
 	}
+	sbuf->buf = nbuf;
+	sbuf->buf_size = newlen;
 	return nbuf;
 }
 
 void
-sbuffer_free(void *buf, size_t len)
+sbuffer_free(sbuffer_t *sbuf)
 {
-	safe_munmap(buf, len, MMAP_ERASE);
+	safe_munmap(sbuf->buf, sbuf->buf_size, MMAP_ERASE);
+	sbuf->buf = NULL;
+	sbuf->buf_size = 0;
 }
 
 /*
@@ -101,9 +118,10 @@ storage_hmac_verify(rvault_t *vault, const void *buf, size_t len,
  *
  * => Constructs metadata and stores together with encrypted data.
  * => Computes the HMAC on the metadata and the pre-encrypted data.
- * => Returns the total number of bytes written to the file.
+ * => On success: returns the total number of bytes written to the file.
+ * => On error: return -1 and sets 'errno'.
  */
-int
+ssize_t
 storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 {
 	fileobj_hdr_t *hdr;
@@ -183,17 +201,19 @@ err:
 /*
  * storage_read_data: decrypt the data in the file and return a buffer.
  *
- * => Returns a buffer with decrypted data and its length in 'lenp'.
  * => Verifies the data using HMAC.
+ * => On success: returns decrypted data length and fills 'sbuf'.
+ * => On error: returns -1 and sets 'errno'.
  */
-void *
-storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
+ssize_t
+storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 {
+	ssize_t nbytes = -1;
 	fileobj_hdr_t *hdr;
 	const void *enc_buf;
+	sbuffer_t tmpsbuf;
 	void *buf = NULL;
 	size_t buf_len;
-	ssize_t nbytes;
 	bool use_ae;
 
 	/*
@@ -203,11 +223,11 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	if (file_len < FILEOBJ_HDR_LEN) {
 		app_log(LOG_ERR, "data file corrupted");
 		errno = EIO;
-		return NULL;
+		return -1;
 	}
 	hdr = safe_mmap(file_len, fd, 0);
 	if (hdr == NULL) {
-		return NULL;
+		return -1;
 	}
 	buf_len = FILEOBJ_EDATA_LEN(hdr);
 	if (file_len < FILEOBJ_FILE_LEN(hdr) || buf_len > file_len) {
@@ -216,8 +236,6 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 		goto out;
 	}
 	if (buf_len == 0) {
-		buf = NULL;
-		*lenp = 0;
 		goto out;
 	}
 
@@ -234,7 +252,8 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	/*
 	 * Allocate a buffer and decrypt the data into it.
 	 */
-	if ((buf = sbuffer_alloc(buf_len)) == NULL) {
+	memset(&tmpsbuf, 0, sizeof(sbuffer_t));
+	if ((buf = sbuffer_alloc(&tmpsbuf, buf_len)) == NULL) {
 		app_log(LOG_ERR, "buffer allocation failed");
 		goto out;
 	}
@@ -242,8 +261,8 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	nbytes = crypto_decrypt(vault->crypto, enc_buf, buf_len, buf, buf_len);
 	if (nbytes == -1 || FILEOBJ_DATA_LEN(hdr) != (size_t)nbytes) {
 		app_log(LOG_ERR, "decryption failed");
-		sbuffer_free(buf, buf_len);
-		buf = NULL;
+		sbuffer_free(sbuf);
+		nbytes = -1;
 		goto out;
 	}
 
@@ -252,14 +271,14 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, size_t *lenp)
 	 */
 	if (!use_ae && storage_hmac_verify(vault, buf, nbytes, hdr) == -1) {
 		app_log(LOG_ERR, "HMAC verification failed");
-		sbuffer_free(buf, buf_len);
-		buf = NULL;
+		sbuffer_free(sbuf);
+		nbytes = -1;
 		goto out;
 	}
-	*lenp = nbytes;
+	memcpy(sbuf, &tmpsbuf, sizeof(sbuffer_t));
 out:
 	safe_munmap(hdr, file_len, 0);
-	return buf;
+	return nbytes;
 }
 
 ssize_t
