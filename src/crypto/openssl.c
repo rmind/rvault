@@ -47,6 +47,7 @@ get_openssl_cipher(crypto_cipher_t c)
 		cipher = EVP_chacha20();
 		break;
 	case CHACHA20_POLY1305:
+		/* Note: OpenSSL uses IETF (RFC 7539) variation. */
 		cipher = EVP_chacha20_poly1305();
 		break;
 	default:
@@ -75,9 +76,6 @@ openssl_crypto_create(crypto_t *crypto)
 		 * Both ciphers use 128-bit authentication tag.
 		 */
 		crypto->tlen = 16;
-		if ((crypto->tag = malloc(crypto->tlen)) == NULL) {
-			return -1;
-		}
 		break;
 	default:
 		crypto->tlen = 0;
@@ -90,7 +88,7 @@ openssl_crypto_create(crypto_t *crypto)
  */
 static ssize_t
 openssl_crypto_encrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen)
+    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
 {
 	const EVP_CIPHER *cipher = crypto->ctx;
 	EVP_CIPHER_CTX *ctx;
@@ -99,9 +97,8 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 	int len;
 
 	/* Note: OpenSSL APIs take signed int. */
-	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
-		return -1;
-	}
+	ASSERT(inlen <= INT_MAX);
+
 	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
 		return -1;
 	}
@@ -140,7 +137,7 @@ err:
  */
 static ssize_t
 openssl_crypto_decrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen)
+    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
 {
 	const EVP_CIPHER *cipher = crypto->ctx;
 	EVP_CIPHER_CTX *ctx;
@@ -149,9 +146,8 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 	int len;
 
 	/* Note: OpenSSL APIs take signed int. */
-	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
-		return -1;
-	}
+	ASSERT(inlen <= INT_MAX);
+
 	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
 		return -1;
 	}
@@ -184,27 +180,21 @@ err:
 	return nbytes;
 }
 
-/*
- * hmac_sha3_256: should be a plain SHA-3 256-bit hash.
- */
-ssize_t
-hmac_sha3_256(const void *key, size_t klen, const void *data, size_t dlen,
-    unsigned char buf[static HMAC_SHA3_256_BUFLEN])
+static ssize_t
+openssl_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
+    unsigned char buf[static HMAC_MAX_BUFLEN])
 {
+	const size_t klen = crypto->klen;
 	const EVP_MD *h = EVP_sha3_256();
 	unsigned nbytes;
 	HMAC_CTX *ctx;
 
 	ASSERT(EVP_MD_size(h) == HMAC_SHA3_256_BUFLEN);
 
-	if (dlen > INT_MAX) {
-		return -1;
-	}
-
 	if ((ctx = HMAC_CTX_new()) == NULL) {
 		return -1;
 	}
-	HMAC_Init_ex(ctx, key, klen, h, NULL);
+	HMAC_Init_ex(ctx, crypto->key, klen, h, NULL);
 	HMAC_Update(ctx, data, dlen);
 	HMAC_Final(ctx, buf, &nbytes);
 	HMAC_CTX_free(ctx);
@@ -212,7 +202,7 @@ hmac_sha3_256(const void *key, size_t klen, const void *data, size_t dlen,
 	return (size_t)nbytes;
 }
 
-static void __constructor
+static void __constructor(101)
 openssl_crypto_register(void)
 {
 	static const crypto_ops_t openssl_ops = {
@@ -220,6 +210,7 @@ openssl_crypto_register(void)
 		.destroy	= NULL,
 		.encrypt	= openssl_crypto_encrypt,
 		.decrypt	= openssl_crypto_decrypt,
+		.hmac		= openssl_crypto_hmac,
 	};
 	crypto_engine_register("openssl", &openssl_ops);
 }

@@ -18,6 +18,8 @@ ifeq ($(MAKECMDGOALS),debug)
 DEBUG=		1
 endif
 
+USE_OPENSSL?=	1
+
 #
 # Common C compiler flags.
 #
@@ -111,8 +113,8 @@ endif
 ifeq ($(SYSNAME),NetBSD)
 LDFLAGS+=	-lrefuse
 else
-CFLAGS+=	$(shell pkg-config fuse --cflags)
-LDFLAGS+=	$(shell pkg-config fuse --libs)
+CFLAGS+=	$(shell pkg-config --cflags fuse)
+LDFLAGS+=	$(shell pkg-config --libs fuse)
 endif
 
 ifeq ($(LIBSCRYPT_KDF),1)
@@ -121,7 +123,22 @@ LDFLAGS+=	-lscrypt-kdf
 else
 LDFLAGS+=	-lscrypt
 endif
-LDFLAGS+=	-lssl -lcrypto -lcurl
+
+ifeq ($(USE_OPENSSL),1)
+LDFLAGS+=	-lssl -lcrypto
+endif
+
+ifeq ($(USE_MBEDTLS),1)
+LDFLAGS+=	-lmbedcrypto
+endif
+
+ifeq ($(USE_SODIUM),1)
+CFLAGS+=	$(shell pkg-config --cflags libsodium)
+LDFLAGS+=	$(shell pkg-config --libs libsodium)
+endif
+
+LDFLAGS+=	-lcurl
+
 ifeq ($(USE_SQLITE),1)
 CFLAGS+=	-DSQLITE3_SERIALIZE
 LDFLAGS+=	-lsqlite3 -ledit
@@ -149,7 +166,15 @@ OBJS+=		misc/utils.o
 OBJS+=		crypto/generic.o
 OBJS+=		crypto/crypto.o
 OBJS+=		crypto/kdf.o
+ifeq ($(USE_OPENSSL),1)
 OBJS+=		crypto/openssl.o
+endif
+ifeq ($(USE_MBEDTLS),1)
+OBJS+=		crypto/mbedtls.o
+endif
+ifeq ($(USE_SODIUM),1)
+OBJS+=		crypto/sodium.o
+endif
 
 #
 # libs

@@ -178,26 +178,18 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 
 static int
 rvault_hmac_compute(crypto_t *crypto, const rvault_hdr_t *hdr,
-    uint8_t hmac[static HMAC_SHA3_256_BUFLEN])
+    uint8_t hmac[static HMAC_MAX_BUFLEN])
 {
-	const void *key;
-	size_t key_len;
-
-	key = crypto_get_key(crypto, &key_len);
-	ASSERT(key != NULL);
-
-	if (hmac_sha3_256(key, key_len, (const void *)hdr,
-	    RVAULT_HMAC_DATALEN(hdr), hmac) == -1) {
-		return -1;
-	}
-	return 0;
+	const void *buf = (const void *)hdr;
+	const size_t len = RVAULT_HMAC_DATALEN(hdr);
+	return crypto_hmac(crypto, buf, len, hmac);
 }
 
 static int
 rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
 {
 	const void *hmac_rec = RVAULT_HDR_TO_HMAC(hdr);
-	uint8_t hmac_comp[HMAC_SHA3_256_BUFLEN];
+	uint8_t hmac_comp[HMAC_MAX_BUFLEN];
 
 	if (rvault_hmac_compute(crypto, hdr, hmac_comp) == -1) {
 		return -1;
@@ -217,7 +209,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	rvault_hdr_t *hdr = NULL;
 	void *iv = NULL, *kp = NULL, *uid = NULL;
 	size_t file_len, iv_len, kp_len, uid_len;
-	uint8_t hmac[HMAC_SHA3_256_BUFLEN];
+	uint8_t hmac[HMAC_MAX_BUFLEN];
 	int ret = -1, fd;
 
 	/*
@@ -238,6 +230,11 @@ rvault_init(const char *path, const char *server, const char *pwd,
 		cipher = CRYPTO_CIPHER_PRIMARY;
 	}
 	if ((crypto = crypto_create(cipher)) == NULL) {
+		if (errno == ENOTSUP) {
+			app_log(LOG_CRIT,
+			    APP_NAME": the `%s' cipher is not supported "
+			    "on your system", cipher_str);
+		}
 		goto err;
 	}
 	if ((iv = crypto_gen_iv(crypto, &iv_len)) == NULL) {
@@ -313,7 +310,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	/*
 	 * Compute the HMAC and write it to the file.  Copy it over.
 	 */
-	if (rvault_hmac_compute(crypto, hdr, hmac) != 0) {
+	if (rvault_hmac_compute(crypto, hdr, hmac) == -1) {
 		goto err;
 	}
 	memcpy(RVAULT_HDR_TO_HMAC(hdr), hmac, HMAC_SHA3_256_BUFLEN);
@@ -386,6 +383,11 @@ rvault_open_hdr(rvault_hdr_t *hdr, const char *server, const size_t file_len)
 	 * Create the crypto object and set the IV.
 	 */
 	if ((vault->crypto = crypto_create(vault->cipher)) == NULL) {
+		if (errno == ENOTSUP) {
+			app_log(LOG_CRIT,
+			    APP_NAME": the used cipher is not supported "
+			    "on your system (change the library)", NULL);
+		}
 		goto err;
 	}
 	if (crypto_set_iv(vault->crypto, iv, iv_len) == -1) {

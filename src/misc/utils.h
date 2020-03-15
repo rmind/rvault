@@ -39,7 +39,7 @@
  */
 
 #ifndef __constructor
-#define	__constructor		__attribute__((constructor))
+#define	__constructor(p)	__attribute__((constructor(p)))
 #endif
 
 #ifndef __packed
