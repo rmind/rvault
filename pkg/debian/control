@@ -8,7 +8,7 @@ Build-Depends:
  libscrypt-dev,
  libfuse-dev,
  libcurl4-dev,
- libreadline-dev,
+ libedit-dev,
  libsqlite3-dev
 Standards-Version: 3.9.1
 Homepage: https://github.com/rmind/rvault
