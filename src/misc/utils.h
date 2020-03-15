@@ -122,7 +122,7 @@ flsl(long x)
 /*
  * Byte-order conversions.
  */
-#if defined(__linux__) || defined(sun)
+#if defined(__linux__) || defined(sun) || defined(__CYGWIN__)
 #include <endian.h>
 #elif defined(__APPLE__)
 #include <libkern/OSByteOrder.h>
