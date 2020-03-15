@@ -20,7 +20,7 @@ BuildRequires:	libscrypt-devel
 BuildRequires:	fuse-devel
 BuildRequires:	libcurl-devel
 %if %{with sqlite}
-BuildRequires:	readline-devel
+BuildRequires:	libedit-dev
 BuildRequires:	sqlite-devel
 %endif
 
@@ -30,7 +30,7 @@ Requires:	libcurl
 Requires:	fuse-libs
 Requires:	fuse
 %if %{with sqlite}
-Requires:	readline
+Requires:	libedit
 Requires:	sqlite-libs
 %endif
 
@@ -45,7 +45,7 @@ distributed under the 2-clause BSD license.
 %setup -q -n src
 
 %build
-make clean && make %{?_smp_mflags} %{?with_sqlite:USE_SQLITE=1}
+make clean && make %{?_smp_mflags} %{?with_sqlite:USE_SQLITE=yes}
 
 %install
 make install \

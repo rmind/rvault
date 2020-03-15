@@ -8,13 +8,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <inttypes.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include <err.h>
 
 #include <sqlite3.h>
-#include <readline/readline.h>
-#include <readline/history.h>
+#include <editline/readline.h>
 
 #include "rvault.h"
 #include "storage.h"

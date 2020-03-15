@@ -111,7 +111,7 @@ Mandatory:
 - libcurl
 
 Optional:
-- libreadline
+- libedit
 - sqlite3 3.23 or newer with `SQLITE_ENABLE_DESERIALIZE` enabled
 
 ## Building

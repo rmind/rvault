@@ -48,7 +48,7 @@ endif
 
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
-USE_SQLITE?=	1
+USE_SQLITE?=	yes
 endif
 ifeq ($(SYSNAME),NetBSD)
 CFLAGS+=	-D_NETBSD_SOURCE -D_KERNTYPES
@@ -80,18 +80,26 @@ CFLAGS+=	-DNDEBUG
 endif
 
 #
-# Dependencies: compiler flags and libraries to link.
+# Sqlite3 needs to be compiled with SQLITE_ENABLE_DESERIALIZE.
 #
 
-ifdef USE_SQLITE
+USE_SQLITE?=	try
+
+ifeq ($(USE_SQLITE),try)
 SQLITE3_SERIALIZE:=	$(shell echo '\
     \#include <stdio.h>\n\
     \#include <sqlite3.h>\n\
     int main() { sqlite3_serialize(NULL, "", NULL, 0); return 0; }' | \
-    $(CC) -o /dev/null -xc -lsqlite3 - \
+    $(CC) $(CFLAGS) -Wno-error -o /dev/null -xc -lsqlite3 - \
     >/dev/null 2>/dev/null && echo 1 || echo 0)
 USE_SQLITE=	$(SQLITE3_SERIALIZE)
+else ifeq ($(USE_SQLITE),yes)
+USE_SQLITE=	1
 endif
+
+#
+# Dependencies: compiler flags and libraries to link.
+#
 
 ifeq ($(SYSNAME),Darwin)
 # FIXME/XXX
@@ -116,7 +124,7 @@ endif
 LDFLAGS+=	-lssl -lcrypto -lcurl
 ifeq ($(USE_SQLITE),1)
 CFLAGS+=	-DSQLITE3_SERIALIZE
-LDFLAGS+=	-lsqlite3 -lreadline
+LDFLAGS+=	-lsqlite3 -ledit
 endif
 
 #

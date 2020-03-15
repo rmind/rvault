@@ -29,7 +29,7 @@ addons:
     - libscrypt-dev
     - libfuse-dev
     - libcurl4
-    - libreadline-dev
+    - libedit-dev
     - libsqlite3-dev
     - liblua5.3-dev
     - lua5.3
