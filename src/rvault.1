@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd March 2, 2020
+.Dd March 21, 2020
 .Dt RVAULT 1
 .Os
 .Sh NAME
@@ -43,7 +43,7 @@ keys, certificates) and small documents.
 It uses
 .Em envelope encryption
 with one-time password (OTP) authentication.
-The vault can be operated as a filesystem in userspace.
+The vault can be operated as a file system in userspace.
 .\" -----
 .Sh OPTIONS
 The general options are:
@@ -75,14 +75,16 @@ The first argument,
 specifies the action to take.
 Available commands are:
 .Bl -tag -width create -offset 3n
-.It Ic create Oo Fl n Oc Oo Fl c Ar cipher Oc Oo Fl h Oc Ar uid
+.It Ic create Oo Fl c Ar cipher Oc Oo Fl m Ar mac Oc Oo Fl n Oc Oo Fl h Oc Ar uid
 Create a new vault with the given UID.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl c | Fl Fl cipher Ar cipher
+Cipher to be used for encryption.
+.It Fl m | Fl Fl mac Ar mac
+MAC algorithm to use for composite AE scheme.
 .It Fl n | Fl Fl noauth
 No authentication.
 WARNING: Such use case is very significantly less secure.
-.It Fl c | Fl Fl cipher Ar cipher
-Cipher to be used for encryption.
 .It Fl h
 Show help of this command.
 .El
@@ -155,6 +157,17 @@ Encrypt and write the file into the vault
 .El
 .Pp
 All paths for these commands must represent the namespace of vault.
+.\" -----
+.Sh DATA AUTHENTICATION
+Authenticated encryption (AE) is used for the file data and metadata,
+including the file and directory names.
+.Pp
+The file system hierarchy as a whole, however, is not authenticated.
+This is something to be aware of if the encrypted data would be stored
+externally (e.g. as a backup).
+Future versions of
+.Nm
+might provide a solution for this with snapshot or backup functionality.
 .\" -----
 .Sh ENVIRONMENT VARIABLES
 The following environment variables are available:

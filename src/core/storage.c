@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <time.h>
 #include <errno.h>
 
 #include "rvault.h"
@@ -81,98 +82,82 @@ sbuffer_free(sbuffer_t *sbuf)
 }
 
 /*
- * HMAC computation and verification for file objects.
- */
-
-static int
-storage_hmac_compute(rvault_t *vault, const void *buf, size_t len,
-    uint8_t hmac[static HMAC_MAX_BUFLEN])
-{
-	return crypto_hmac(vault->crypto, buf, len, hmac);
-}
-
-static int
-storage_hmac_verify(rvault_t *vault, const void *buf, size_t len,
-    const fileobj_hdr_t *hdr)
-{
-	const void *hmac_onfile = FILEOBJ_HDR_TO_AETAG(hdr);
-	uint8_t hmac[HMAC_MAX_BUFLEN];
-
-	if (FILEOBJ_AETAG_LEN(hdr) != HMAC_SHA3_256_BUFLEN) {
-		return -1;
-	}
-	if (storage_hmac_compute(vault, buf, len, hmac) == -1) {
-		return -1;
-	}
-	return memcmp(hmac_onfile, hmac, HMAC_SHA3_256_BUFLEN) ? -1 : 0;
-}
-
-/*
  * storage_write_data: encrypt the given buffer and write to the file.
  *
  * => Constructs metadata and stores together with encrypted data.
- * => Computes the HMAC on the metadata and the pre-encrypted data.
  * => On success: returns the total number of bytes written to the file.
  * => On error: return -1 and sets 'errno'.
  */
 ssize_t
 storage_write_data(rvault_t *vault, int fd, const void *buf, size_t len)
 {
+	crypto_t *crypto = vault->crypto;
 	fileobj_hdr_t *hdr;
 	size_t max_buf_len, file_len, tag_len, enc_len;
-	uint8_t hmac[HMAC_MAX_BUFLEN];
 	const void *tag;
 	void *enc_buf;
 	ssize_t nbytes;
 
 	/*
-	 * Allocate memory for the full sync.  Ensure the header area,
-	 * including the padding, is fully zeroed for a stable HMAC/tag.
+	 * AEAD or HMAC-based generic composition using the EtM scheme.
+	 * It must have been enforced at the vault level.
 	 */
-	enc_len = crypto_get_buflen(vault->crypto, len);
-	max_buf_len = FILEOBJ_HDR_LEN + enc_len;
-	tag_len = crypto_get_taglen(vault->crypto);
-	max_buf_len += MAX(HMAC_SHA3_256_BUFLEN, tag_len);
+	tag_len = crypto_get_aetaglen(crypto);
+	ASSERT(tag_len > 0);
+
+	/*
+	 * Allocate memory for the full sync.  Ensure the header area,
+	 * including the padding, is fully zeroed for a stable AE tag.
+	 */
+	enc_len = crypto_get_buflen(crypto, len);
+	max_buf_len = FILEOBJ_GETMETA_LEN(tag_len) + enc_len;
 	if ((hdr = malloc(max_buf_len)) == NULL) {
 		app_log(LOG_ERR, "buffer allocation failed");
 		return -1;
 	}
-	memset(hdr, 0, FILEOBJ_HDR_LEN);
+	memset(hdr, 0, FILEOBJ_GETMETA_LEN(tag_len));
+
+	/*
+	 * Setup the header and set it as the AAD.
+	 */
+	hdr->ver = RVAULT_ABI_VER;
+	hdr->aetag_len = tag_len;
+	hdr->data_len = htobe64(len);
+	hdr->cdata_len = htobe64(0);
+	hdr->edata_pad = 0; // to be set
+	hdr->mtime = htobe64(time(NULL));
+
+	if (crypto_set_aad(crypto, hdr, FILEOBJ_HDR_LEN) == -1) {
+		app_log(LOG_ERR, "crypto_set_aad() failed");
+		return -1;
+	}
 
 	/*
 	 * Encrypt the file.
 	 */
 	enc_buf = FILEOBJ_HDR_TO_DATA(hdr);
-	nbytes = crypto_encrypt(vault->crypto, buf, len, enc_buf, enc_len);
+	nbytes = crypto_encrypt(crypto, buf, len, enc_buf, enc_len);
 	if (nbytes == -1) {
 		app_log(LOG_ERR, "encryption failed");
 		goto err;
 	}
 
 	/*
-	 * Setup the header.
+	 * Obtain the AE tag and copy it over.
 	 */
-	hdr->ver = RVAULT_ABI_VER;
-	hdr->cipher = vault->cipher;
-	hdr->aetag_len = -1; // to be set
-	hdr->edata_len = htobe64(nbytes);
-	hdr->edata_pad = (size_t)nbytes - len;
-	ASSERT(hdr->edata_pad < UINT8_MAX);
-
-	/*
-	 * Compute the AE tag or HMAC and a adjust the file length.
-	 */
-	if ((tag = crypto_get_tag(vault->crypto, &tag_len)) == NULL) {
-		if (storage_hmac_compute(vault, buf, len, hmac) == -1) {
-			nbytes = -1;
-			goto err;
-		}
-		tag_len = HMAC_SHA3_256_BUFLEN;
-		tag = hmac;
+	if ((tag = crypto_get_aetag(crypto, &tag_len)) == NULL) {
+		app_log(LOG_ERR, "crypto_get_aetag() failed");
+		nbytes = -1;
+		goto err;
 	}
 	memcpy(FILEOBJ_HDR_TO_AETAG(hdr), tag, tag_len);
-	file_len = FILEOBJ_HDR_LEN + nbytes + tag_len;
-	hdr->aetag_len = tag_len;
+
+	/*
+	 * Set the AE signature length and adjust the file length.
+	 * We also store the pad bytes to ease the verification on read.
+	 */
+	file_len = FILEOBJ_GETMETA_LEN(tag_len) + nbytes;
+	hdr->edata_pad = (size_t)nbytes - len;
 
 	/*
 	 * Write the file to the disk.
@@ -195,23 +180,23 @@ err:
 /*
  * storage_read_data: decrypt the data in the file and return a buffer.
  *
- * => Verifies the data using HMAC.
+ * => AE verification is performed for metadata and data.
  * => On success: returns decrypted data length and fills 'sbuf'.
  * => On error: returns -1 and sets 'errno'.
  */
 ssize_t
 storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 {
+	const size_t tag_len = crypto_get_aetaglen(vault->crypto);
+	fileobj_hdr_t *hdr, *ae_hdr = NULL;
+	const void *enc_buf, *ae_tag;
 	ssize_t nbytes = -1;
-	fileobj_hdr_t *hdr;
-	const void *enc_buf;
 	sbuffer_t tmpsbuf;
 	void *buf = NULL;
 	size_t buf_len;
-	bool use_ae;
 
 	/*
-	 * Memory-map the data file.  Perform some integrity checks,
+	 * Memory-map the data file.  Perform basic integrity checks,
 	 * including the length verifications.
 	 */
 	if (file_len < FILEOBJ_HDR_LEN) {
@@ -223,12 +208,13 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	if (hdr == NULL) {
 		return -1;
 	}
-	buf_len = FILEOBJ_EDATA_LEN(hdr);
-	if (file_len < FILEOBJ_FILE_LEN(hdr) || buf_len > file_len) {
+	if (FILEOBJ_FILE_LEN(hdr) != (uint64_t)file_len ||
+	    FILEOBJ_AETAG_LEN(hdr) != (uint64_t)tag_len) {
 		app_log(LOG_ERR, "data file corrupted");
 		errno = EIO;
 		goto out;
 	}
+	buf_len = FILEOBJ_EDATA_LEN(hdr);
 	if (buf_len == 0) {
 		goto out;
 	}
@@ -236,15 +222,30 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	/*
 	 * Obtain and set the AE tag.
 	 */
-	use_ae = crypto_get_taglen(vault->crypto) != 0;
-	if (use_ae && crypto_set_tag(vault->crypto,
-	    FILEOBJ_HDR_TO_AETAG(hdr), FILEOBJ_AETAG_LEN(hdr)) == -1) {
+	ae_tag = FILEOBJ_HDR_TO_AETAG(hdr);
+	if (crypto_set_aetag(vault->crypto, ae_tag, tag_len) == -1) {
 		app_log(LOG_ERR, "failed to obtain the AE tag");
 		goto out;
 	}
 
 	/*
-	 * Allocate a buffer and decrypt the data into it.
+	 * Set the adjusted header as AAD to verify.
+	 */
+	if ((ae_hdr = malloc(FILEOBJ_HDR_LEN)) == NULL) {
+		app_elog(LOG_ERR, "%s: malloc() failed", __func__);
+		goto out;
+	}
+	memcpy(ae_hdr, hdr, FILEOBJ_HDR_LEN);
+	ae_hdr->edata_pad = 0;
+
+	if (crypto_set_aad(vault->crypto, ae_hdr, FILEOBJ_HDR_LEN) == -1) {
+		app_log(LOG_ERR, "crypto_set_aad() failed");
+		goto out;
+	}
+
+	/*
+	 * Allocate a buffer and decrypt the data.  Note: AEAD or HMAC-based
+	 * verification will be performed by the crypto_decrypt() primitive.
 	 */
 	memset(&tmpsbuf, 0, sizeof(sbuffer_t));
 	if ((buf = sbuffer_alloc(&tmpsbuf, buf_len)) == NULL) {
@@ -259,19 +260,10 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 		nbytes = -1;
 		goto out;
 	}
-
-	/*
-	 * Verify the HMAC.  Note: it is safe to use the lengths here.
-	 */
-	if (!use_ae && storage_hmac_verify(vault, buf, nbytes, hdr) == -1) {
-		app_log(LOG_ERR, "HMAC verification failed");
-		sbuffer_free(sbuf);
-		nbytes = -1;
-		goto out;
-	}
 	memcpy(sbuf, &tmpsbuf, sizeof(sbuffer_t));
 out:
 	safe_munmap(hdr, file_len, 0);
+	free(ae_hdr);
 	return nbytes;
 }
 

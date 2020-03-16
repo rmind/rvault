@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -24,7 +24,7 @@
 #include <openssl/hmac.h>
 
 #define	__CRYPTO_PRIVATE
-#include "crypto.h"
+#include "crypto_impl.h"
 #include "utils.h"
 
 #if (OPENSSL_VERSION_NUMBER < 0x10100000L)
@@ -109,6 +109,14 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 	bufp = outbuf;
 	nbytes = 0;
 
+	/* AEAD: process any AE associated data  */
+	if (crypto->ae_cipher && crypto->aad &&
+	    EVP_EncryptUpdate(ctx, NULL, &len,
+	    crypto->aad, crypto->aad_len) != 1) {
+		nbytes = -1;
+		goto err;
+	}
+
 	if (EVP_EncryptUpdate(ctx, bufp, &len, inbuf, inlen) != 1) {
 		nbytes = -1;
 		goto err;
@@ -122,8 +130,8 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 	nbytes += len;
 
 	/* If AE cipher: obtain the authentication tag. */
-	if (crypto->tlen && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_GET_TAG,
-	    crypto->tlen, crypto->tag) != 1) {
+	if (crypto->ae_cipher && EVP_CIPHER_CTX_ctrl(ctx,
+	    EVP_CTRL_AEAD_GET_TAG, crypto->tlen, crypto->tag) != 1) {
 		nbytes = -1;
 		goto err;
 	}
@@ -157,6 +165,14 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 	bufp = outbuf;
 	nbytes = 0;
 
+	/* AEAD: process any AE associated data. */
+	if (crypto->ae_cipher && crypto->aad &&
+	    EVP_DecryptUpdate(ctx, NULL, &len,
+	    crypto->aad, crypto->aad_len) != 1) {
+		nbytes = -1;
+		goto err;
+	}
+
 	if (EVP_DecryptUpdate(ctx, bufp, &len, inbuf, inlen) != 1) {
 		nbytes = -1;
 		goto err;
@@ -164,8 +180,8 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 	nbytes += len;
 
 	/* If AE cipher: verify the authentication tag. */
-	if (crypto->tlen && EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_AEAD_SET_TAG,
-	    crypto->tlen, crypto->tag) != 1) {
+	if (crypto->ae_cipher && EVP_CIPHER_CTX_ctrl(ctx,
+	    EVP_CTRL_AEAD_SET_TAG, crypto->tlen, crypto->tag) != 1) {
 		nbytes = -1;
 		goto err;
 	}
@@ -181,25 +197,46 @@ err:
 }
 
 static ssize_t
-openssl_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
-    unsigned char buf[static HMAC_MAX_BUFLEN])
+openssl_crypto_hmac(const crypto_t *crypto, const void *data, size_t data_len,
+    const void *aad, size_t aad_len, unsigned char buf[static HMAC_MAX_BUFLEN])
 {
-	const size_t klen = crypto->klen;
-	const EVP_MD *h = EVP_sha3_256();
-	unsigned nbytes;
+	ssize_t nbytes = -1;
+	const EVP_MD *h;
 	HMAC_CTX *ctx;
+	unsigned ret;
 
-	ASSERT(EVP_MD_size(h) == HMAC_SHA3_256_BUFLEN);
+	switch (crypto->hmac_id) {
+	case HMAC_SHA256:
+		h = EVP_sha256();
+		break;
+	case HMAC_SHA3_256:
+		h = EVP_sha3_256();
+		break;
+	default:
+		errno = ENOTSUP;
+		return -1;
+	}
+	ASSERT(EVP_MD_size(h) <= HMAC_MAX_BUFLEN);
 
 	if ((ctx = HMAC_CTX_new()) == NULL) {
 		return -1;
 	}
-	HMAC_Init_ex(ctx, crypto->key, klen, h, NULL);
-	HMAC_Update(ctx, data, dlen);
-	HMAC_Final(ctx, buf, &nbytes);
+	if (HMAC_Init_ex(ctx, crypto->auth_key, crypto->alen, h, NULL) != 1) {
+		goto out;
+	}
+	if (aad && HMAC_Update(ctx, aad, aad_len) != 1) {
+		goto out;
+	}
+	if (data && HMAC_Update(ctx, data, data_len) != 1) {
+		goto out;
+	}
+	if (HMAC_Final(ctx, buf, &ret) != 1) {
+		goto out;
+	}
+	nbytes = ret;
+out:
 	HMAC_CTX_free(ctx);
-
-	return (size_t)nbytes;
+	return nbytes;
 }
 
 static void __constructor(101)

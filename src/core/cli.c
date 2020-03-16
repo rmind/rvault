@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -19,6 +19,7 @@
 
 #include "rvault.h"
 #include "rvaultfs.h"
+#include "storage.h"
 #include "fileobj.h"
 #include "recovery.h"
 #include "cli.h"
@@ -76,14 +77,15 @@ usage_datapath(void)
 static int
 create_vault(const char *path, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "c:hn?";
+	static const char *opts_s = "c:m:nh?";
 	static struct option opts_l[] = {
 		{ "cipher",	required_argument,	0,	'c'	},
-		{ "help",	no_argument,		0,	'h'	},
+		{ "mac",	required_argument,	0,	'm'	},
 		{ "noauth",	no_argument,		0,	'n'	},
+		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
-	const char *uid, *cipher = NULL;
+	const char *uid, *cipher = NULL, *mac = NULL;
 	char *passphrase0, *passphrase;
 	unsigned flags = 0;
 	int ch, ret;
@@ -93,6 +95,9 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 		switch (ch) {
 		case 'c':
 			cipher = optarg;
+			break;
+		case 'm':
+			mac = optarg;
 			break;
 		case 'n':
 			flags |= RVAULT_FLAG_NOAUTH;
@@ -124,7 +129,7 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 		errx(EXIT_FAILURE, "passphrases do not match");
 	}
 
-	ret = rvault_init(path, server, passphrase, uid, cipher, flags);
+	ret = rvault_init(path, server, passphrase, uid, cipher, mac, flags);
 	crypto_memzero(passphrase, strlen(passphrase));
 	if (ret == -1) {
 		fprintf(stderr, "vault creation failed -- exiting.\n");
@@ -132,12 +137,13 @@ create_vault(const char *path, const char *server, int argc, char **argv)
 	return ret;
 usage:
 	fprintf(stderr,
-	    "Usage:\t" APP_NAME " create [ -n ] [ -c cipher ] UID\n"
+	    "Usage:\t" APP_NAME " create [ -c cipher ] [ -m mac ] [ -n ] UID\n"
 	    "\n"
 	    "Create a new vault with the given UID.\n"
 	    "\n"
 	    "Options:\n"
 	    "  -c|--cipher CIPHER  Cipher\n"
+	    "  -m|--mac MAC        MAC algorithm\n"
 	    "  -n|--noauth         No authentication "
 	    "(WARNING: this is much less secure)"
 	    "\n"
@@ -537,7 +543,7 @@ list_ciphers(void)
 int
 main(int argc, char **argv)
 {
-	static const char *opts_s = "cd:hl:s:v?";
+	static const char *opts_s = "cd:l:s:vh?";
 	static struct option opts_l[] = {
 		{ "ciphers",	no_argument,		0,	'c'	},
 		{ "datapath",	required_argument,	0,	'd'	},
@@ -545,6 +551,7 @@ main(int argc, char **argv)
 		{ "log-level",	required_argument,	0,	'l'	},
 		{ "server",	required_argument,	0,	's'	},
 		{ "version",	no_argument,		0,	'v' 	},
+		{ "help",	no_argument,		0,	'h'	},
 		{ NULL,		0,			NULL,	0	}
 	};
 	const char *data_path = getenv("RVAULT_PATH");

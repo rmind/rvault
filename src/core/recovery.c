@@ -27,6 +27,9 @@ get_section(const char *line)
 	if (strcasestr(line, "ekey")) {
 		return RECOVERY_EKEY;
 	}
+	if (strcasestr(line, "akey")) {
+		return RECOVERY_AKEY;
+	}
 	return RECOVERY_NSECTIONS;
 }
 
@@ -53,18 +56,23 @@ void
 rvault_recovery_export(rvault_t *vault, FILE *fp)
 {
 	rvault_hdr_t *hdr;
-	size_t key_len, file_len;
-	const void *key;
+	size_t key_len, akey_len, file_len;
+	const void *key, *akey;
 
 	fputs("# METADATA:\n", fp);
 	hdr = open_metadata_mmap(vault->base_path, NULL, &file_len);
 	hex_write_wrapped(fp, hdr, file_len);
-	fputs("", fp);
+	fputs("\n", fp);
 
 	fputs("# EKEY:\n", fp);
 	key = crypto_get_key(vault->crypto, &key_len);
 	hex_write_wrapped(fp, key, key_len);
-	fputs("", fp);
+	fputs("\n", fp);
+
+	fputs("# AKEY:\n", fp);
+	akey = crypto_get_authkey(vault->crypto, &akey_len);
+	hex_write_wrapped(fp, akey, akey_len);
+	fputs("\n", fp);
 
 	safe_munmap(hdr, file_len, 0);
 }
@@ -88,6 +96,7 @@ rvault_recovery_import(FILE *fp)
 	}
 	sections[RECOVERY_METADATA].bufsize = RVAULT_MAX_METALEN;
 	sections[RECOVERY_EKEY].bufsize = CRYPTO_MAX_KEYLEN;
+	sections[RECOVERY_AKEY].bufsize = CRYPTO_MAX_KEYLEN;
 
 	/*
 	 * Read the sections in the recovery file.

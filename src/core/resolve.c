@@ -16,8 +16,8 @@
 #include "utils.h"
 
 /*
- * rvault_unhex_aedata: parse the hex string which contains data and,
- * optionally, an AE tag separated by ":".
+ * rvault_unhex_aedata: parse the hex string which contains data
+ * and an AE tag separated by ":".
  */
 int
 rvault_unhex_aedata(const char *hex, void **datap, size_t *len,
@@ -25,19 +25,22 @@ rvault_unhex_aedata(const char *hex, void **datap, size_t *len,
 {
 	void *data = NULL, *tag = NULL;
 	char *s = NULL, *taghex;
+	unsigned off;
 
-	if ((taghex = strchr(hex, ':')) != NULL) {
-		const unsigned off = (uintptr_t)taghex - (uintptr_t)hex + 1;
-
-		if ((s = strndup(hex, off)) == NULL) {
-			goto err;
-		}
-		tag = hex_read_arbitrary_buf(taghex, strlen(taghex), taglen);
-		if (tag == NULL) {
-			goto err;
-		}
-		hex = s;
+	if ((taghex = strchr(hex, ':')) == NULL) {
+		goto err;
 	}
+	off = (uintptr_t)taghex - (uintptr_t)hex + 1;
+
+	if ((s = strndup(hex, off)) == NULL) {
+		goto err;
+	}
+	tag = hex_read_arbitrary_buf(taghex, strlen(taghex), taglen);
+	if (tag == NULL) {
+		goto err;
+	}
+	hex = s;
+
 	if ((data = hex_read_arbitrary_buf(hex, strlen(hex), len)) == NULL) {
 		goto err;
 	}
@@ -57,6 +60,8 @@ static int
 get_path_component(rvault_t *vault, const char *pc, size_t len, FILE *fp)
 {
 	unsigned char buf[PATH_MAX + 1];
+	const void *tag;
+	size_t tag_len;
 	ssize_t ret;
 
 	if (!vault->crypto) {
@@ -74,17 +79,12 @@ get_path_component(rvault_t *vault, const char *pc, size_t len, FILE *fp)
 	if (ret == -1 || hex_write(fp, buf, ret) == -1) {
 		return -1;
 	}
-	if (crypto_get_taglen(vault->crypto)) {
-		size_t tag_len;
-		const void *tag;
-
-		if (fputc(':', fp) == EOF) {
-			return -1;
-		}
-		tag = crypto_get_tag(vault->crypto, &tag_len);
-		if (hex_write(fp, tag, tag_len) == -1) {
-			return -1;
-		}
+	if (fputc(':', fp) == EOF) {
+		return -1;
+	}
+	tag = crypto_get_aetag(vault->crypto, &tag_len);
+	if (hex_write(fp, tag, tag_len) == -1) {
+		return -1;
 	}
 	return 0;
 }
@@ -201,14 +201,13 @@ rvault_resolve_vname(rvault_t *vault, const char *vname, size_t *rlen)
 	vname += RVAULT_FOBJ_PREFLEN;
 
 	if (rvault_unhex_aedata(vname, &buf, &len, &tag, &tlen) == -1) {
+		app_log(LOG_ERR, "%s: corrupted file name", __func__);
 		goto err;
 	}
-	if (tag && crypto_set_tag(vault->crypto, tag, tlen) == -1) {
+	if (crypto_set_aetag(vault->crypto, tag, tlen) == -1) {
 		app_log(LOG_ERR, "%s: invalid AE tag", __func__);
-		free(tag);
 		goto err;
 	}
-	free(tag);
 
 	blen = crypto_get_buflen(vault->crypto, len);
 	if ((name = malloc(blen + 1)) == NULL) {
@@ -227,6 +226,7 @@ rvault_resolve_vname(rvault_t *vault, const char *vname, size_t *rlen)
 	}
 err:
 	free(buf);
+	free(tag);
 
 	if (name == NULL) {
 		app_log(LOG_ERR, "%s: failed to resolve `%s'", __func__, vname);

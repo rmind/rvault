@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <dirent.h>
 #include <assert.h>
 
 #include "rvault.h"
@@ -63,13 +64,50 @@ mock_get_vault_dir(void)
 	return mkdtemp(strdup("/tmp/rvault-test.XXXXXX"));
 }
 
+static void
+mock_remove_vault_dir(const char *path)
+{
+	struct dirent *dp;
+	DIR *dirp;
+
+	if (strncmp(path, "/tmp/", 5) != 0) {
+		abort(); // only for tests!
+	}
+
+	/*
+	 * Only to clean up tests.. don't care about error handling.
+	 */
+	dirp = opendir(path);
+	assert(dirp != NULL);
+
+	while ((dp = readdir(dirp)) != NULL) {
+		char *dpath = NULL;
+		struct stat st;
+		int ret;
+
+		if (dp->d_name[0] == '.')
+			continue; // no dot-files in vault
+
+		ret = asprintf(&dpath, "%s/%s", path, dp->d_name);
+		assert(ret > 0);
+		ret = stat(dpath, &st);
+		assert(ret == 0);
+
+		if (S_ISDIR(st.st_mode)) {
+			mock_remove_vault_dir(dpath);
+		} else {
+			unlink(dpath);
+		}
+		free(dpath);
+	}
+	closedir(dirp);
+	rmdir(path);
+}
+
 void
 mock_cleanup_vault_dir(char *path)
 {
-	char metafile[PATH_MAX];
-	snprintf(metafile, sizeof(metafile), "%s/%s", path, RVAULT_META_FILE);
-	unlink(metafile);
-	rmdir(path);
+	mock_remove_vault_dir(path);
 	free(path);
 }
 
@@ -81,9 +119,10 @@ mock_get_vault(const char *cipher, char **path)
 	rvault_t *vault;
 
 	rvault_init(base_path, NULL, passphrase, TEST_UUID,
-	    cipher ? cipher : "aes-256-cbc", RVAULT_FLAG_NOAUTH);
+	    cipher ? cipher : "aes-256-cbc", NULL, RVAULT_FLAG_NOAUTH);
 	vault = rvault_open(base_path, NULL, passphrase);
 	free(passphrase);
+	assert(vault);
 
 	*path = base_path;
 	return vault;
@@ -114,7 +153,9 @@ mock_vault_fcheck(rvault_t *vault, const char *f, const char *data)
 	char buf[1024];
 	ssize_t nbytes;
 
+	assert(fobj != NULL);
 	assert(datalen < sizeof(buf));
+
 	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
 	assert(nbytes == (ssize_t)datalen);
 	buf[nbytes] = '\0';

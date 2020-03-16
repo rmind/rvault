@@ -118,10 +118,10 @@ test_file_onebyte(rvault_t *vault)
 }
 
 static void
-run_tests(void)
+run_tests(const char *cipher)
 {
 	char *base_path = NULL;
-	rvault_t *vault = mock_get_vault("chacha20-poly1305", &base_path);
+	rvault_t *vault = mock_get_vault(cipher, &base_path);
 	test_file_expand(vault);
 	test_file_onebyte(vault);
 	mock_cleanup_vault(vault, base_path);
@@ -130,7 +130,14 @@ run_tests(void)
 int
 main(void)
 {
-	run_tests();
+	const char **ciphers;
+	unsigned nitems = 0;
+
+	ciphers = crypto_cipher_list(&nitems);
+	for (unsigned i = 0; i < nitems; i++) {
+		const char *cipher = ciphers[i];
+		run_tests(cipher);
+	}
 	puts("ok");
 	return 0;
 }
