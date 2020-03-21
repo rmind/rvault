@@ -77,12 +77,12 @@ out:
 }
 
 int
-rvault_key_set(rvault_t *vault)
+rvault_push_key(rvault_t *vault)
 {
 	crypto_t *crypto = vault->crypto;
-	void *key = NULL, *ekey = NULL;
+	void *rkey = NULL, *akey = NULL, *ekey = NULL;
 	char *ekey_hex = NULL, *tag_hex, *s;
-	size_t klen, blen, tlen;
+	size_t klen, aklen, rlen, blen, tlen;
 	ssize_t nbytes, ret = -1;
 	const void *tag = NULL;
 	http_req_t req;
@@ -93,10 +93,12 @@ rvault_key_set(rvault_t *vault)
 	 * Prepare the buffers.
 	 */
 	klen = crypto_get_keylen(crypto);
-	if ((key = malloc(klen)) == NULL) {
+	aklen = crypto_get_authkeylen(crypto);
+	rlen = klen + aklen;
+	if ((rkey = malloc(rlen)) == NULL) {
 		goto out;
 	}
-	blen = crypto_get_buflen(crypto, klen);
+	blen = crypto_get_buflen(crypto, rlen);
 	if ((ekey = malloc(blen)) == NULL) {
 		goto out;
 	}
@@ -106,14 +108,15 @@ rvault_key_set(rvault_t *vault)
 	 * - Generate a random key.
 	 * - Encrypt it with the derived key.
 	 *
-	 * NOTE: Authenticated encryption is already achieved with HMAC
-	 * on the vault header and the application-level authentication,
-	 * so the cipher-level AE tag is not strictly necessary.
+	 * Note: the memory block contains both the encryption and
+	 * authentication keys (they will also be separated on pull).
 	 */
-	if (crypto_getrandbytes(key, klen) == -1) {
+	if (crypto_getrandbytes(rkey, rlen) == -1) {
 		goto out;
 	}
-	if ((nbytes = crypto_encrypt(crypto, key, klen, ekey, blen)) == -1) {
+	akey = (uint8_t *)rkey + klen;
+
+	if ((nbytes = crypto_encrypt(crypto, rkey, rlen, ekey, blen)) == -1) {
 		goto out;
 	}
 	if ((ekey_hex = hex_write_str(ekey, nbytes)) == NULL) {
@@ -140,9 +143,17 @@ rvault_key_set(rvault_t *vault)
 	printf("%s\n", req.buf ? (const char *)req.buf : "-");
 
 	/*
-	 * Re-set the active key.
+	 * Re-set the active keys.
 	 */
-	ret = crypto_set_key(crypto, key, klen);
+	if (crypto_set_key(crypto, rkey, klen) == -1) {
+		app_log(LOG_DEBUG, "%s: crypto_set_key() failed", __func__);
+		goto out;
+	}
+	if (crypto_set_authkey(crypto, akey, aklen) == -1) {
+		app_log(LOG_DEBUG, "%s: crypto_set_authkey() failed", __func__);
+		goto out;
+	}
+	ret = 0;
 out:
 	/*
 	 * Destroy the buffers.
@@ -155,23 +166,23 @@ out:
 		crypto_memzero(ekey, blen);
 		free(ekey);
 	}
-	if (key) {
-		crypto_memzero(key, klen);
-		free(key);
+	if (rkey) {
+		crypto_memzero(rkey, klen);
+		free(rkey);
 	}
 	http_req_free(&req);
 	return ret;
 }
 
 int
-rvault_key_get(rvault_t *vault)
+rvault_pull_key(rvault_t *vault)
 {
 	crypto_t *crypto = vault->crypto;
-	void *ekey = NULL, *key = NULL, *tag = NULL;
-	size_t clen = 0, blen, tlen;
+	void *ekey = NULL, *rkey = NULL, *akey = NULL, *tag = NULL;
+	size_t clen = 0, blen, tlen, klen;
 	char *s, *code;
 	http_req_t req;
-	ssize_t klen;
+	ssize_t rlen;
 	int ret = -1;
 
 	memset(&req, 0, sizeof(http_req_t));
@@ -213,7 +224,7 @@ rvault_key_get(rvault_t *vault)
 		    "server is invalid");
 		goto out;
 	}
-	if (tag && crypto_set_aetag(crypto, tag, tlen) == -1) {
+	if (crypto_set_aetag(crypto, tag, tlen) == -1) {
 		app_log(LOG_CRIT, APP_NAME": invalid AE tag");
 		free(tag);
 		goto out;
@@ -223,28 +234,37 @@ rvault_key_get(rvault_t *vault)
 	/*
 	 * Decrypt one layer using the derived key.
 	 */
-	if ((key = malloc(blen)) == NULL) {
+	if ((rkey = malloc(blen)) == NULL) {
 		goto out;
 	}
-	if ((klen = crypto_decrypt(crypto, ekey, blen, key, blen)) == -1) {
+	if ((rlen = crypto_decrypt(crypto, ekey, blen, rkey, blen)) == -1) {
 		app_log(LOG_CRIT, APP_NAME": the key received from the "
 		    "server is invalid");
 		goto out;
 	}
+	klen = crypto_get_keylen(crypto);
+	akey = (uint8_t *)rkey + klen;
 
 	/*
-	 * Re-set the active key.
+	 * Re-set the active keys.
 	 */
-	if (crypto_set_key(crypto, key, klen) == -1) {
+	if (crypto_set_key(crypto, rkey, klen) == -1) {
+		app_log(LOG_DEBUG, "%s: crypto_set_key() failed", __func__);
+		goto out;
+	}
+	if (crypto_set_authkey(crypto, akey, rlen - klen) == -1) {
+		app_log(LOG_DEBUG, "%s: crypto_set_authkey() failed", __func__);
 		goto out;
 	}
 	ret = 0;
 out:
 	if (ekey) {
 		crypto_memzero(ekey, blen);
+		free(ekey);
 	}
-	if (key) {
-		crypto_memzero(key, blen);
+	if (rkey) {
+		crypto_memzero(rkey, blen);
+		free(rkey);
 	}
 	crypto_memzero(code, clen);
 	http_req_free(&req);

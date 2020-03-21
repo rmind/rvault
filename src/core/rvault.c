@@ -354,7 +354,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 		vault.hmac_id = hdr->hmac_id;
 		memcpy(vault.uid, uid, uid_len);
 
-		if (rvault_key_set(&vault) == -1) {
+		if (rvault_push_key(&vault) == -1) {
 			app_log(LOG_DEBUG, "%s() failed", __func__);
 			goto err;
 		}
@@ -503,7 +503,7 @@ rvault_open(const char *path, const char *server, const char *pwd)
 			usage_srvurl();
 			goto err;
 		}
-		if (rvault_key_get(vault) == -1) {
+		if (rvault_pull_key(vault) == -1) {
 			goto err;
 		}
 	}

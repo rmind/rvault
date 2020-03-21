@@ -347,6 +347,13 @@ crypto_get_authkey(const crypto_t *crypto, size_t *akey_len)
 	return crypto->auth_key;
 }
 
+ssize_t
+crypto_get_authkeylen(const crypto_t *crypto)
+{
+	ASSERT(crypto->alen > 0);
+	return crypto->alen;
+}
+
 bool
 crypto_cipher_ae_p(const crypto_t *crypto)
 {

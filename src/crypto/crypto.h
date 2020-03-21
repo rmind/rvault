@@ -75,6 +75,7 @@ const void *	crypto_get_key(const crypto_t *, size_t *);
 ssize_t		crypto_get_keylen(const crypto_t *);
 int		crypto_set_authkey(crypto_t *, const void *, size_t);
 const void *	crypto_get_authkey(const crypto_t *, size_t *);
+ssize_t		crypto_get_authkeylen(const crypto_t *);
 
 int		crypto_set_aetag(crypto_t *, const void *, size_t);
 size_t		crypto_get_aetaglen(const crypto_t *);

@@ -129,7 +129,7 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 }
 
 static void
-test_sizes(const size_t *sizes, size_t count, unsigned multi)
+test_sizes(crypto_cipher_t c, const size_t *sizes, size_t count, size_t multi)
 {
 	for (unsigned i = 0; i < count; i++) {
 		const size_t len = sizes[i] * multi;
@@ -137,31 +137,36 @@ test_sizes(const size_t *sizes, size_t count, unsigned multi)
 
 		assert(buf != NULL);
 		crypto_getrandbytes(buf, len);
-
-		/* Non-AE cipher with HMAC-based AE. */
-		test_encdec(AES_256_CBC, buf, len, TEST_TEXT);
-		test_encdec(CHACHA20, buf, len, TEST_TEXT);
-
-		/* AE cipher (no HMAC-based AE, naturally). */
-		test_encdec(AES_256_GCM, buf, len, TEST_TEXT);
-		test_encdec(CHACHA20_POLY1305, buf, len, TEST_TEXT);
-
+		test_encdec(c, buf, len, TEST_TEXT);
 		free(buf);
 	}
 }
 
-int
-main(void)
+static void
+run_test(const char *cipher)
 {
+	const crypto_cipher_t c = crypto_cipher_id(cipher);
 	const size_t small[] = { 1, 13, 16, 17, 31, 32, 33, 128, 1024 };
 	const size_t large[] = { 1, 16, 128, 1024 };
 
 	/*
 	 * Large dataset: from bytes to megabytes and a gigabyte.
 	 */
-	test_sizes(small, __arraycount(small), 1); // bytes
-	test_sizes(large, __arraycount(large), 1024 * 1024); // MB
+	test_sizes(c, small, __arraycount(small), 1); // bytes
+	test_sizes(c, large, __arraycount(large), 1024 * 1024); // MB
+}
 
+int
+main(void)
+{
+	const char **ciphers;
+	unsigned nitems = 0;
+
+	ciphers = crypto_cipher_list(&nitems);
+	for (unsigned i = 0; i < nitems; i++) {
+		const char *cipher = ciphers[i];
+		run_test(cipher);
+	}
 	puts("ok");
 	return 0;
 }
