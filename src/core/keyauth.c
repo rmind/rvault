@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -81,9 +81,10 @@ rvault_key_set(rvault_t *vault)
 {
 	crypto_t *crypto = vault->crypto;
 	void *key = NULL, *ekey = NULL;
-	char *ekey_hex = NULL;
-	ssize_t nbytes, ret = -1;
+	char *ekey_hex = NULL, *tag_hex, *s;
 	size_t klen, blen, tlen;
+	ssize_t nbytes, ret = -1;
+	const void *tag = NULL;
 	http_req_t req;
 
 	memset(&req, 0, sizeof(http_req_t));
@@ -107,7 +108,7 @@ rvault_key_set(rvault_t *vault)
 	 *
 	 * NOTE: Authenticated encryption is already achieved with HMAC
 	 * on the vault header and the application-level authentication,
-	 * so cipher-level AE tag is not strictly necessary.
+	 * so the cipher-level AE tag is not strictly necessary.
 	 */
 	if (crypto_getrandbytes(key, klen) == -1) {
 		goto out;
@@ -118,20 +119,16 @@ rvault_key_set(rvault_t *vault)
 	if ((ekey_hex = hex_write_str(ekey, nbytes)) == NULL) {
 		goto out;
 	}
-	if ((tlen = crypto_get_taglen(crypto)) != 0) {
-		const void *tag = crypto_get_tag(crypto, &tlen);
-		char *tag_hex, *s;
-
-		if ((tag_hex = hex_write_str(tag, tlen)) == NULL) {
-			goto out;
-		}
-		if (asprintf(&s, "%s:%s", ekey_hex, tag_hex) == -1) {
-			free(tag_hex);
-			goto out;
-		}
-		free(tag_hex);
-		ekey_hex = s;
+	tag = crypto_get_aetag(crypto, &tlen);
+	if ((tag_hex = hex_write_str(tag, tlen)) == NULL) {
+		goto out;
 	}
+	if (asprintf(&s, "%s:%s", ekey_hex, tag_hex) == -1) {
+		free(tag_hex);
+		goto out;
+	}
+	free(tag_hex);
+	ekey_hex = s;
 
 	/*
 	 * Make an API call to register the key.
@@ -216,7 +213,7 @@ rvault_key_get(rvault_t *vault)
 		    "server is invalid");
 		goto out;
 	}
-	if (tag && crypto_set_tag(crypto, tag, tlen) == -1) {
+	if (tag && crypto_set_aetag(crypto, tag, tlen) == -1) {
 		app_log(LOG_CRIT, APP_NAME": invalid AE tag");
 		free(tag);
 		goto out;

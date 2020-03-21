@@ -28,8 +28,7 @@ static int	lua_crypto_gen_iv(lua_State *);
 static int	lua_crypto_gen_key(lua_State *);
 static int	lua_crypto_set_iv(lua_State *);
 static int	lua_crypto_set_key(lua_State *);
-static int	lua_crypto_set_tag(lua_State *);
-static int	lua_crypto_get_tag(lua_State *);
+static int	lua_crypto_set_authkey(lua_State *);
 static int	lua_crypto_encrypt(lua_State *);
 static int	lua_crypto_decrypt(lua_State *);
 
@@ -45,9 +44,7 @@ static const struct luaL_Reg crypto_methods[] = {
 
 	{ "set_iv",		lua_crypto_set_iv	},
 	{ "set_key",		lua_crypto_set_key	},
-	{ "set_tag",		lua_crypto_set_tag	},
-
-	{ "get_tag",		lua_crypto_get_tag	},
+	{ "set_auth_key",	lua_crypto_set_authkey	},
 
 	/* Encrypt/decrypt. */
 	{ "encrypt",		lua_crypto_encrypt	},
@@ -96,17 +93,24 @@ lua_crypto_new(lua_State *L)
 {
 	crypto_lua_t *lctx;
 	crypto_cipher_t cipher;
+	crypto_hmac_t hmac;
 	crypto_t *crypto;
-	const char *c;
+	const char *c, *h;
 
 	c = lua_tostring(L, 1);
 	luaL_argcheck(L, c, 1, "`string' expected");
+	h = lua_tolstring(L, 2, NULL);
+	hmac = CRYPTO_HMAC_PRIMARY;
 
 	if ((cipher = crypto_cipher_id(c)) == CIPHER_NONE) {
-		luaL_error(L, "invalid cipher `%s'");
+		luaL_error(L, "invalid cipher `%s'", c);
 		return 0;
 	}
-	if ((crypto = crypto_create(cipher)) == NULL) {
+	if (h && (hmac = crypto_hmac_id(h)) == HMAC_NONE) {
+		luaL_error(L, "invalid HMAC `%s'", c);
+		return 0;
+	}
+	if ((crypto = crypto_create(cipher, hmac)) == NULL) {
 		luaL_error(L, "OOM");
 		return 0;
 	}
@@ -219,7 +223,7 @@ lua_crypto_set_key(lua_State *L)
 }
 
 static int
-lua_crypto_set_tag(lua_State *L)
+lua_crypto_set_authkey(lua_State *L)
 {
 	crypto_lua_t *lctx = lua_crypto_getctx(L);
 	const void *buf;
@@ -227,25 +231,11 @@ lua_crypto_set_tag(lua_State *L)
 
 	buf = lua_tolstring(L, 2, &len);
 	luaL_argcheck(L, buf, 2, "binary `string' expected");
-	if (crypto_set_tag(lctx->crypto, buf, len) == -1) {
+	if (crypto_set_authkey(lctx->crypto, buf, len) == -1) {
 		luaL_error(L, "OOM");
 		return 0;
 	}
 	return 0;
-}
-
-static int
-lua_crypto_get_tag(lua_State *L)
-{
-	crypto_lua_t *lctx = lua_crypto_getctx(L);
-	const void *tag;
-	size_t len;
-
-	if ((tag = crypto_get_tag(lctx->crypto, &len)) == NULL) {
-		return 0;
-	}
-	lua_pushlstring(L, tag, len);
-	return 1;
 }
 
 /*
@@ -255,19 +245,33 @@ lua_crypto_get_tag(lua_State *L)
 typedef enum { CRYPTO_DO_ENCRYPT, CRYPTO_DO_DECRYPT } crypto_action_t;
 
 static int
-lua_crypto_process(lua_State *L, crypto_action_t action)
+lua_crypto_process(lua_State *L, const crypto_action_t action)
 {
 	crypto_lua_t *lctx = lua_crypto_getctx(L);
-	size_t dlen, blen;
-	const void *data;
+	size_t narg = 2, dlen, blen, alen, tlen;
+	const void *data, *aad, *tag;
 	ssize_t nbytes;
 	void *buf;
 
-	data = lua_tolstring(L, 2, &dlen);
-	luaL_argcheck(L, data, 2, "binary `string' expected");
+	data = lua_tolstring(L, narg, &dlen);
+	luaL_argcheck(L, data, narg, "binary `string' expected");
 	if (dlen == 0) {
 		return 0;
 	}
+	narg++;
+
+	if (action == CRYPTO_DO_DECRYPT) {
+		tag = lua_tolstring(L, narg, &tlen);
+		luaL_argcheck(L, tag, narg, "binary `string' expected");
+		luaL_argcheck(L, tlen == crypto_get_aetaglen(lctx->crypto),
+		    narg, "AE tag is of incorrect length");
+		narg++;
+	}
+
+	if ((aad = lua_tolstring(L, narg, &alen)) != NULL) {
+		crypto_set_aad(lctx->crypto, aad, alen); // cannot fail
+	}
+	narg++;
 
 	blen = crypto_get_buflen(lctx->crypto, dlen);
 	if ((buf = malloc(blen)) == NULL) {
@@ -277,18 +281,26 @@ lua_crypto_process(lua_State *L, crypto_action_t action)
 	switch (action) {
 	case CRYPTO_DO_ENCRYPT:
 		nbytes = crypto_encrypt(lctx->crypto, data, dlen, buf, blen);
+		tag = crypto_get_aetag(lctx->crypto, &tlen); // cannot fail
 		break;
 	case CRYPTO_DO_DECRYPT:
+		(void)crypto_set_aetag(lctx->crypto, tag, tlen); // cannot fail
 		nbytes = crypto_decrypt(lctx->crypto, data, dlen, buf, blen);
 		break;
 	}
 	if (nbytes == -1) {
+		crypto_memzero(buf, blen);
 		free(buf);
-		luaL_error(L, "%s failed");
 		return 0;
 	}
 	lua_pushlstring(L, buf, nbytes);
+	crypto_memzero(buf, blen);
 	free(buf);
+
+	if (action == CRYPTO_DO_ENCRYPT) {
+		lua_pushlstring(L, tag, tlen);
+		return 2;
+	}
 	return 1;
 }
 

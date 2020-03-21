@@ -14,13 +14,14 @@
 #include <assert.h>
 
 #include "rvault.h"
+#include "storage.h"
 #include "recovery.h"
 #include "utils.h"
 #include "mock.h"
 #include "sys.h"
 
 static void
-test_basic(void)
+test_basic(const char *cipher)
 {
 	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
@@ -28,7 +29,7 @@ test_basic(void)
 	int ret;
 
 	ret = rvault_init(base_path, NULL, passphrase, TEST_UUID,
-	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
+	    cipher, NULL, RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
 	vault = rvault_open(base_path, NULL, passphrase);
@@ -40,7 +41,7 @@ test_basic(void)
 }
 
 static void
-test_invalid_passphrase(void)
+test_invalid_passphrase(const char *cipher)
 {
 	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
@@ -48,7 +49,7 @@ test_invalid_passphrase(void)
 	int ret;
 
 	ret = rvault_init(base_path, NULL, "not-test", TEST_UUID,
-	    "aes-256-cbc", RVAULT_FLAG_NOAUTH);
+	    cipher, NULL, RVAULT_FLAG_NOAUTH);
 	assert(ret == 0);
 
 	vault = rvault_open(base_path, NULL, passphrase);
@@ -59,7 +60,7 @@ test_invalid_passphrase(void)
 }
 
 static void
-test_recovery(void)
+test_recovery(const char *cipher)
 {
 	char *base_path = NULL, *buf = NULL, *recovery = NULL;
 	rvault_t *vault;
@@ -69,7 +70,7 @@ test_recovery(void)
 
 	/* Create a vault and export the recovery data. */
 	fp = open_memstream(&buf, &len);
-	vault = mock_get_vault("aes-256-gcm", &base_path);
+	vault = mock_get_vault(cipher, &base_path);
 	mock_vault_fwrite(vault, "/some-file", "arbitrary data");
 	rvault_recovery_export(vault, fp);
 	rvault_close(vault);
@@ -154,10 +155,18 @@ test_paths(void)
 int
 main(void)
 {
+	const char **ciphers;
+	unsigned nitems = 0;
+
 	app_setlog(0);
-	test_basic();
-	test_recovery();
-	test_invalid_passphrase();
+
+	ciphers = crypto_cipher_list(&nitems);
+	for (unsigned i = 0; i < nitems; i++) {
+		const char *cipher = ciphers[i];
+		test_basic(cipher);
+		test_invalid_passphrase(cipher);
+		test_recovery(cipher);
+	}
 	test_paths();
 	puts("ok");
 	return 0;

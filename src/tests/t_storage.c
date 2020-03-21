@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -39,7 +39,7 @@ test_basic(rvault_t *vault)
 }
 
 static void
-test_corrupted(rvault_t *vault)
+test_corrupted_data(rvault_t *vault)
 {
 	const int fd = mock_get_tmpfile(NULL);
 	ssize_t nbytes, file_len, len;
@@ -58,24 +58,50 @@ test_corrupted(rvault_t *vault)
 }
 
 static void
+test_corrupted_aetag(rvault_t *vault)
+{
+	const int fd = mock_get_tmpfile(NULL);
+	ssize_t nbytes, file_len, len;
+	sbuffer_t sbuf;
+	unsigned off;
+
+	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
+	file_len = fs_file_size(fd);
+	assert(nbytes > 0 && file_len == nbytes);
+
+	off = (uintptr_t)FILEOBJ_HDR_TO_AETAG((uintptr_t)0);
+	mock_corrupt_byte_at(fd, off, NULL);
+
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+	len = storage_read_data(vault, fd, file_len, &sbuf);
+	assert(len == -1);
+	close(fd);
+}
+
+static void
 run_tests(const char *cipher)
 {
 	char *base_path = NULL;
 	rvault_t *vault = mock_get_vault(cipher, &base_path);
 	test_basic(vault);
-	test_corrupted(vault);
+	test_corrupted_data(vault);
+	test_corrupted_aetag(vault);
 	mock_cleanup_vault(vault, base_path);
 }
 
 int
 main(void)
 {
-	app_setlog(LOG_CRIT);
-	run_tests("aes-256-cbc");
-	run_tests("chacha20");
-	run_tests("aes-256-gcm");
-	run_tests("chacha20-poly1305");
+	const char **ciphers;
+	unsigned nitems = 0;
 
+	app_setlog(LOG_CRIT);
+
+	ciphers = crypto_cipher_list(&nitems);
+	for (unsigned i = 0; i < nitems; i++) {
+		const char *cipher = ciphers[i];
+		run_tests(cipher);
+	}
 	puts("ok");
 	return 0;
 }

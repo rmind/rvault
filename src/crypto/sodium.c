@@ -111,26 +111,34 @@ sodium_crypto_decrypt(const crypto_t *crypto,
 
 static ssize_t
 sodium_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
-    unsigned char buf[static HMAC_MAX_BUFLEN])
+    const void *aad, size_t aad_len, unsigned char buf[static HMAC_MAX_BUFLEN])
 {
-#if 1
-	(void)crypto; (void)data; (void)dlen; (void)buf;
-	errno = ENOTSUP; // XXX: no SHA-3
+	crypto_auth_hmacsha256_state sha256;
+
+	switch (crypto->hmac_id) {
+	case HMAC_SHA256:
+		if (crypto_auth_hmacsha256_init(&sha256,
+		    crypto->auth_key, crypto->alen) == -1)
+			return -1;
+		}
+		if (aad && crypto_auth_hmacsha256_update(&sha256,
+		    aad, aad_len) == -1) {
+			return -1;
+		}
+		if (data && crypto_auth_hmacsha256_update(&sha256,
+		    data, dlen) == -1) {
+			return -1;
+		}
+		if (crypto_auth_hmacsha256_final(&sha256, buf) == -1) {
+			return -1;
+		}
+		return crypto_auth_hmacsha256_BYTES;
+	default:
+		break;
+	}
+
+	errno = ENOTSUP;
 	return -1;
-#else
-	const size_t klen = crypto->klen;
-
-	if (klen != crypto_auth_hmacsha256_KEYBYTES) {
-		errno = ENOTSUP;
-		return -1;
-	}
-	ASSERT(crypto_auth_hmacsha256_BYTES <= HMAC_MAX_BUFLEN);
-
-	if (crypto_auth_hmacsha256(buf, data, dlen, crypto->key) != 0) {
-		return -1;
-	}
-	return crypto_auth_hmacsha256_BYTES;
-#endif
 }
 
 static void __constructor(102)

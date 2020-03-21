@@ -15,8 +15,9 @@ matrix:
     # Travis transient failures
     #- os: linux
     #  arch: ppc64le
-    - os: osx
-      osx_image: xcode11.2
+    # Travis transient failures
+    #- os: osx
+    #  osx_image: xcode11.2
 
 addons:
   apt:

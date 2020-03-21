@@ -18,7 +18,7 @@
 #include <mbedtls/md.h>
 
 #define	__CRYPTO_PRIVATE
-#include "crypto.h"
+#include "crypto_impl.h"
 #include "utils.h"
 
 static mbedtls_cipher_type_t
@@ -154,24 +154,31 @@ mbedtls_crypto_decrypt(const crypto_t *crypto,
 
 static ssize_t
 mbedtls_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
-    unsigned char buf[static HMAC_MAX_BUFLEN])
+    const void *aad, size_t aad_len, unsigned char buf[static HMAC_MAX_BUFLEN])
 {
-#if 1
-	(void)crypto; (void)data; (void)dlen; (void)buf;
-	errno = ENOTSUP; // XXX: no SHA-3
-	return -1;
-#else
-	const size_t klen = crypto->klen;
 	const mbedtls_md_info_t *md;
+	mbedtls_md_type_t md_type;
+	ssize_t nbytes = -1;
 
-	if ((md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256)) == NULL) {
+	switch (crypto->hmac_id) {
+	case HMAC_SHA256:
+		md_type = MBEDTLS_MD_SHA256;
+		nbytes = 32;
+		break;
+	default:
+		errno = ENOTSUP;
 		return -1;
 	}
-	if (mbedtls_md_hmac(md, crypto->key, klen, data, dlen, buf) != 0) {
+	ASSERT(nbytes <= HMAC_MAX_BUFLEN);
+
+	if ((md = mbedtls_md_info_from_type(md_type)) == NULL) {
 		return -1;
 	}
-	return 32;
-#endif
+	if (mbedtls_md_hmac(md, crypto->auth_key, crypto->alen,
+	    data, dlen, buf) != 0) {
+		return -1;
+	}
+	return nbytes;
 }
 
 static void __constructor(102)

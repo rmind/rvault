@@ -42,16 +42,35 @@
  *	file system).  The access time may also be time-limited (e.g. forced
  *	unmount with key destruction after 5 minutes of inactivity).
  *
- * Algorithms:
+ * Algorithms
  *
  *	- scrypt for the key derivation function (KDF).
  *	- The passphrase is salted with a random value stored locally.
- *	- AES 256 (CBC mode) or Chacha20 for symmetric encryption.
- *	- Authenticated encryption:
- *		a) HMAC using SHA3 and MAC-then-Encrypt (MtE).
- *		b) AES+GCM and Chacha20+Poly1305 as alternatives to HMAC.
- *	- The client-server communication is only over TLS.
+ *	- The client-server communication is over TLS *only*.
  *	- Authentication with the server using TOTP (RFC 6238).
+ *	- AES 256 GCM and Chacha20 Poly1305 ciphers using AEAD.
+ *	- HMAC SHA256 or SHA-3 for a composite AE scheme -- see below.
+ *
+ * Authenticated Encryption (AE) scheme
+ *
+ *	AE is achieved using an AEAD cipher.  However, it is not feasible
+ *	for authenticating separate encrypted objects which can change
+ *	independently, e.g. file chunks, file name vs data or the whole
+ *	file tree.  For this purpose, HMAC-based _generic composition_
+ *	with the Encrypt-then-MAC scheme (EtM; also called EtA) is used.
+ *
+ *	EtM has been proven to provide INT-CTXT and IND-CCA (assuming
+ *	SUF-CMA) security properties (Bellare and Namprempre, 2007).
+ *
+ * References
+ *
+ *	2010, N. Ferguson, B. Schneier and T. Kohno,
+ *	"Cryptography Engineering: Design Principles and Practical Applications",
+ *	Wiley Publishing; 1st Edition edition.
+ *
+ *	2007, M. Bellare and C. Namprempre, "Authenticated Encryption: Relations
+ *	among notions and analysis of the generic composition paradigm",
+ *	http://cseweb.ucsd.edu/~mihir/papers/oem.pdf
  */
 
 #include <sys/stat.h>
@@ -176,7 +195,7 @@ open_metadata_mmap(const char *base_path, char **normalized_path, size_t *flen)
 	return addr;
 }
 
-static int
+static ssize_t
 rvault_hmac_compute(crypto_t *crypto, const rvault_hdr_t *hdr,
     uint8_t hmac[static HMAC_MAX_BUFLEN])
 {
@@ -189,12 +208,14 @@ static int
 rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
 {
 	const void *hmac_rec = RVAULT_HDR_TO_HMAC(hdr);
+	const ssize_t hmac_len = hdr->hmac_len;
 	uint8_t hmac_comp[HMAC_MAX_BUFLEN];
 
-	if (rvault_hmac_compute(crypto, hdr, hmac_comp) == -1) {
+	/* Note: must verify the 'hmac_len' before comparing. */
+	if (rvault_hmac_compute(crypto, hdr, hmac_comp) != hmac_len) {
 		return -1;
 	}
-	return memcmp(hmac_rec, hmac_comp, HMAC_SHA3_256_BUFLEN) ? -1 : 0;
+	return memcmp(hmac_rec, hmac_comp, hmac_len) ? -1 : 0;
 }
 
 /*
@@ -202,21 +223,22 @@ rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
  */
 int
 rvault_init(const char *path, const char *server, const char *pwd,
-    const char *uid_str, const char *cipher_str, unsigned flags)
+    const char *uid_str, const char *cipher_str, const char *mac_str,
+    unsigned flags)
 {
 	crypto_cipher_t cipher;
+	crypto_hmac_t hmac_id;
 	crypto_t *crypto = NULL;
 	rvault_hdr_t *hdr = NULL;
 	void *iv = NULL, *kp = NULL, *uid = NULL;
 	size_t file_len, iv_len, kp_len, uid_len;
 	uint8_t hmac[HMAC_MAX_BUFLEN];
+	ssize_t hmac_len;
 	int ret = -1, fd;
 
 	/*
-	 * Initialize the metadata:
-	 * - Determine the cipher.
-	 * - Generate the KDF parameters.
-	 * - Generate the IV.
+	 * Determine the cipher and MAC.
+	 * Choose a default, if none specified.
 	 */
 	if (cipher_str) {
 		if ((cipher = crypto_cipher_id(cipher_str)) == CIPHER_NONE) {
@@ -226,10 +248,25 @@ rvault_init(const char *path, const char *server, const char *pwd,
 			goto err;
 		}
 	} else {
-		/* Choose a default. */
 		cipher = CRYPTO_CIPHER_PRIMARY;
 	}
-	if ((crypto = crypto_create(cipher)) == NULL) {
+	if (mac_str) {
+		if ((hmac_id = crypto_hmac_id(mac_str)) == HMAC_NONE) {
+			app_log(LOG_CRIT,
+			    APP_NAME": invalid or unsupported MAC `%s'",
+			    mac_str);
+			goto err;
+		}
+	} else {
+		hmac_id = CRYPTO_HMAC_PRIMARY;
+	}
+
+	/*
+	 * Initialize the metadata:
+	 * - Generate the IV / nonce.
+	 * - Generate the KDF parameters.
+	 */
+	if ((crypto = crypto_create(cipher, hmac_id)) == NULL) {
 		if (errno == ENOTSUP) {
 			app_log(LOG_CRIT,
 			    APP_NAME": the `%s' cipher is not supported "
@@ -246,8 +283,6 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	if ((kp = kdf_create_params(&kp_len)) == NULL) {
 		goto err;
 	}
-	ASSERT(kp_len <= UINT8_MAX);
-	ASSERT(iv_len <= UINT16_MAX);
 
 	/*
 	 * Derive the key: it will be needed for HMAC.
@@ -255,6 +290,8 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	if (crypto_set_passphrasekey(crypto, pwd, kp, kp_len) == -1) {
 		goto err;
 	}
+	hmac_len = crypto_hmac_len(hmac_id);
+	ASSERT(hmac_len > 0);
 
 	/*
 	 * Setup the vault header.
@@ -262,21 +299,34 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	 * - Set the header values.
 	 * - Copy over the IV and KDF parameters.
 	 */
-	file_len = RVAULT_HDR_LEN + iv_len + kp_len + HMAC_SHA3_256_BUFLEN;
+	file_len = RVAULT_HDR_LEN + iv_len + kp_len + hmac_len;
 	if ((hdr = calloc(1, file_len)) == NULL) {
 		goto err;
 	}
+
 	ASSERT(cipher <= UINT8_MAX);
 	ASSERT(flags <= UINT8_MAX);
+	ASSERT(kp_len <= UINT8_MAX);
+	ASSERT(iv_len <= UINT8_MAX);
+	ASSERT(hmac_len <= UINT8_MAX);
 
 	hdr->ver = RVAULT_ABI_VER;
-	hdr->cipher = cipher;
 	hdr->flags = flags;
+	hdr->cipher0 = cipher;
+	hdr->cipher1 = CIPHER_NONE;
+	hdr->hmac_id = hmac_id;
+
 	hdr->kp_len = kp_len;
-	hdr->iv_len = htobe16(iv_len);
-	memcpy(RVAULT_HDR_TO_IV(hdr), iv, iv_len);
+	hdr->iv0_len = iv_len;
+	hdr->iv1_len = 0;
+	hdr->hmac_len = hmac_len;
+
+	memcpy(RVAULT_HDR_TO_IV0(hdr), iv, iv_len);
 	memcpy(RVAULT_HDR_TO_KP(hdr), kp, kp_len);
 
+	/*
+	 * Copy over the UID.
+	 */
 	uid = hex_read_arbitrary_buf(uid_str, strlen(uid_str), &uid_len);
 	if (uid == NULL || uid_len != sizeof(hdr->uid)) {
 		app_log(LOG_CRIT, APP_NAME": invalid user ID (UID); "
@@ -286,10 +336,12 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	memcpy(hdr->uid, uid, uid_len);
 
 	/*
-	 * Register with the remote and post the envelope-encrypted key.
+	 * If using authentication with envelope-encryption:
+	 * - Generate and assign the effective encryption key.
+	 * - Register with the remote and post the envelope-encrypted key.
 	 */
 	if ((flags & RVAULT_FLAG_NOAUTH) == 0) {
-		rvault_t vault; // XXX dummy
+		rvault_t vault; // XXX placeholder
 
 		if (!server) {
 			usage_srvurl();
@@ -299,6 +351,7 @@ rvault_init(const char *path, const char *server, const char *pwd,
 		memset(&vault, 0, sizeof(rvault_t));
 		vault.server_url = server;
 		vault.crypto = crypto;
+		vault.hmac_id = hdr->hmac_id;
 		memcpy(vault.uid, uid, uid_len);
 
 		if (rvault_key_set(&vault) == -1) {
@@ -308,12 +361,13 @@ rvault_init(const char *path, const char *server, const char *pwd,
 	}
 
 	/*
-	 * Compute the HMAC and write it to the file.  Copy it over.
+	 * Now that the effective encryption key has been decided,
+	 * compute the HMAC and write it to the file.  Copy it over.
 	 */
-	if (rvault_hmac_compute(crypto, hdr, hmac) == -1) {
+	if (rvault_hmac_compute(crypto, hdr, hmac) != hmac_len) {
 		goto err;
 	}
-	memcpy(RVAULT_HDR_TO_HMAC(hdr), hmac, HMAC_SHA3_256_BUFLEN);
+	memcpy(RVAULT_HDR_TO_HMAC(hdr), hmac, hmac_len);
 
 	/*
 	 * Open the metadata file and store the record.
@@ -351,20 +405,26 @@ rvault_open_hdr(rvault_hdr_t *hdr, const char *server, const size_t file_len)
 	/* Verify the ABI version. */
 	if (hdr->ver != RVAULT_ABI_VER) {
 		app_log(LOG_CRIT, APP_NAME": incompatible vault version %u\n"
-		    "Hint: vault might have been created using a newer "
-		    "application version", hdr->ver);
+		    "Hint: vault might have been created using a %s "
+		    "application version", hdr->ver,
+		    (hdr->ver > RVAULT_ABI_VER) ?
+		    "newer" : "no longer supported");
 		return NULL;
 	}
 
 	/*
-	 * Verify the lengths: we can trust iv_len and kp_len after this.
+	 * Verify the lengths: we can trust the *length* values to
+	 * represent the accessible memory areas after this.
+	 *
+	 * Ensure that the HMAC algorithm is set.  This must be done
+	 * even if using the AE cipher.
 	 */
-	if (RVAULT_FILE_LEN(hdr) != file_len) {
+	if (RVAULT_FILE_LEN(hdr) != file_len || hdr->hmac_id == HMAC_NONE) {
 		app_log(LOG_CRIT, "rvault: metadata file corrupted");
 		return NULL;
 	}
-	iv_len = be16toh(hdr->iv_len);
-	iv = RVAULT_HDR_TO_IV(hdr);
+	iv_len = hdr->iv0_len;
+	iv = RVAULT_HDR_TO_IV0(hdr);
 
 	/*
 	 * Create and initialize the vault object.
@@ -372,17 +432,19 @@ rvault_open_hdr(rvault_hdr_t *hdr, const char *server, const size_t file_len)
 	if ((vault = calloc(1, sizeof(rvault_t))) == NULL) {
 		return NULL;
 	}
-	vault->cipher = hdr->cipher;
+	vault->cipher = hdr->cipher0;
+	vault->hmac_id = hdr->hmac_id;
 	vault->server_url = server;
 	LIST_INIT(&vault->file_list);
 
-	memcpy(vault->uid, hdr->uid, sizeof(hdr->uid));
 	static_assert(sizeof(vault->uid) == sizeof(hdr->uid), "UUID length");
+	memcpy(vault->uid, hdr->uid, sizeof(hdr->uid));
 
 	/*
 	 * Create the crypto object and set the IV.
 	 */
-	if ((vault->crypto = crypto_create(vault->cipher)) == NULL) {
+	vault->crypto = crypto_create(vault->cipher, vault->hmac_id);
+	if (!vault->crypto) {
 		if (errno == ENOTSUP) {
 			app_log(LOG_CRIT,
 			    APP_NAME": the used cipher is not supported "
@@ -424,8 +486,8 @@ rvault_open(const char *path, const char *server, const char *pwd)
 	/*
 	 * Set the vault key.
 	 *
-	 * NOTE: rvault_open_hdr() verified the header for us, therefore
-	 * we can trust the 'kp_len' at this point.
+	 * NOTE: rvault_open_hdr() verified the header lengths for us,
+	 * therefore we can trust the 'kp_len' at this point.
 	 */
 	kp_len = hdr->kp_len;
 	kp = RVAULT_HDR_TO_KP(hdr);
@@ -447,7 +509,8 @@ rvault_open(const char *path, const char *server, const char *pwd)
 	}
 
 	/*
-	 * Verify the HMAC.  Note: need the crypto object to obtain the key.
+	 * Verify the HMAC.  Note: need the crypto object to obtain the
+	 * authentication key.
 	 */
 	if (rvault_hmac_verify(vault->crypto, hdr) != 0) {
 		app_log(LOG_CRIT, APP_NAME": verification failed: "
@@ -476,9 +539,9 @@ rvault_open_ekey(const char *path, const char *recovery)
 	rsection_t *sections;
 	rvault_t *vault = NULL;
 	char *base_path = NULL;
-	size_t hdrlen, keylen;
+	size_t hdrlen, keylen, akeylen;
 	rvault_hdr_t *hdr;
-	void *key;
+	void *key, *akey;
 	FILE *fp;
 
 	/*
@@ -501,6 +564,9 @@ rvault_open_ekey(const char *path, const char *recovery)
 	key = sections[RECOVERY_EKEY].buf;
 	keylen = sections[RECOVERY_EKEY].nbytes;
 
+	akey = sections[RECOVERY_AKEY].buf;
+	akeylen = sections[RECOVERY_AKEY].nbytes;
+
 	/*
 	 * Create the "recovery" vault object using the metadata.
 	 */
@@ -515,9 +581,14 @@ rvault_open_ekey(const char *path, const char *recovery)
 	base_path = NULL;
 
 	/*
-	 * Set the key.
+	 * Set the keys.
 	 */
 	if (crypto_set_key(vault->crypto, key, keylen) == -1) {
+		rvault_close(vault);
+		vault = NULL;
+		goto err;
+	}
+	if (crypto_set_authkey(vault->crypto, akey, akeylen) == -1) {
 		rvault_close(vault);
 		vault = NULL;
 		goto err;

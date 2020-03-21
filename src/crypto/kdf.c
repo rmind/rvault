@@ -5,6 +5,13 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Key derivation function (KDF).
+ *
+ * - Mechanism to calibrate the KDF parameters.
+ * - Algorithms: scrypt (RFC 7914).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -143,8 +150,7 @@ kdf_create_params(size_t *len)
 /*
  * kdf_passphrase_genkey: generate cryptographic key for a passphrase.
  *
- * => Alogrithm: scrypt KDF.
- * => Return 0 on success and -1 on failure.
+ * => Returns 0 on success and -1 on failure.
  */
 int
 kdf_passphrase_genkey(const char *passphrase, const void *kpbuf, size_t kplen,
@@ -166,7 +172,7 @@ kdf_passphrase_genkey(const char *passphrase, const void *kpbuf, size_t kplen,
 		n = be64toh(kp->n);
 		salt = kp->salt;
 	} else {
-		static unsigned char zero_salt[KDF_SALT_LEN]; // zeroed
+		static const unsigned char zero_salt[KDF_SALT_LEN]; // zeroed
 		n = SCRYPT_N_DEFAULT;
 		salt = zero_salt;
 	}

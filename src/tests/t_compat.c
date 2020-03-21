@@ -23,7 +23,7 @@
 #include "utils.h"
 
 /*
- * rvault create -n -c $crypto 8bba987f-28b7-417e-9e78-dd733dfc2879
+ * rvault create -n -c $cipher 8bba987f-28b7-417e-9e78-dd733dfc2879
  *
  * cd mounted-vault && mkdir dir && printf "some-content" > dir/test-file-0001
  */
@@ -35,66 +35,75 @@ static const struct test_case {
 	const char *	content;
 } test_cases[] = {
 	/*
-	 * ABI v2
+	 * ABI v3
 	 */
 
 	// AES 256 + CBC
 	{
 		.metadata =
-		    "02 01 01 1c 00 10 00 00 8b ba 98 7f 28 b7 41 7e"
-		    "9e 78 dd 73 3d fc 28 79 08 e2 b9 7c 74 bd 33 54"
-		    "13 04 26 93 aa be ae f5 01 00 00 00 00 00 00 00"
-		    "00 00 40 00 ac 6c 5a 25 dd d5 d3 3d 61 a3 19 21"
-		    "63 40 a2 fc cf 6f 21 32 b2 ec 38 62 44 b6 6d 0e"
-		    "22 9c 35 5e ef c1 68 d6 9a ca 6a db b6 10 b3 4a"
-		    "3c 3b 6d 94",
+		    "03 01 01 00 01 00 10 00 1c 20 8b ba 98 7f 28 b7"
+		    "41 7e 9e 78 dd 73 3d fc 28 79 00 00 00 00 00 00"
+		    "33 15 65 92 3d d2 df 71 fe af c5 77 79 25 65 a6"
+		    "01 00 00 00 00 00 00 00 00 00 40 00 61 4d 00 20"
+		    "89 e2 5e b1 46 e4 6f bd d7 7f 9a c7 98 e3 0d 97"
+		    "65 25 02 b8 fe 3f 0d 02 97 b7 27 d7 22 72 04 0a"
+		    "ac aa a7 7f 76 0b 3b 14 55 59 1a c3",
 		.dir =
-		    "RV:ed71f82229703c106e0014955e3900ea",
+		    "RV:468de840f3446eeab8a54a9e50d4c85e:"
+		    "95ffdda9d63bf410868c856387ae00d4"
+		    "31c856464b2ced36ef8e8642ef1c3f06",
 		.file =
-		    "RV:672d37b1baec141763258e22d18893ab",
+		    "RV:fbb54e88ebfc9f12ec8850a296103a14:"
+		    "cf4aea00340313a315e8fbdd528de6d3"
+		    "bab7308cb778a879987c3690374bba12",
 		.content =
-		    "02 01 20 04 00 00 00 00 00 00 00 10 00 00 00 00"
-		    "05 e1 00 a5 ec fe 7e 95 96 9a ac 2e 4e 98 53 cb"
-		    "9b 79 c1 0c 96 92 1d cb 17 fd c9 05 b7 dc c9 21"
-		    "a5 37 9c bc f6 bf 4d a6 88 38 82 3a 1b 12 8d bf",
+		    "03 00 20 04 00 00 00 00 00 00 00 0c 00 00 00 00"
+		    "00 00 00 00 00 00 00 00 5e 76 28 b5 00 00 00 00"
+		    "67 b2 70 da 8b 2e 15 88 9a cf 25 32 91 bf b7 b4"
+		    "f7 5d fe 8c 48 28 4f 11 67 47 60 83 e4 53 26 db"
+		    "44 76 77 ea ed 3f 9a c4 f9 be 98 e3 e5 84 15 02",
 	},
 	// AES 256 + GCM
 	{
 		.metadata =
-		    "02 02 01 1c 00 0c 00 00 8b ba 98 7f 28 b7 41 7e"
-		    "9e 78 dd 73 3d fc 28 79 95 55 e6 46 21 4c f6 9d"
-		    "36 82 c6 da 01 00 00 00 00 00 00 00 00 00 40 00"
-		    "e2 87 fe 0c fe a0 ad 5c 14 4f 64 f8 99 a0 ae e6"
-		    "a4 e7 f1 e0 50 21 df 94 23 84 24 13 5a b2 ed a4"
-		    "4e ee 75 71 11 ed 83 d7 cf 92 5b fc 6f 77 b3 89",
+		    "03 01 02 00 01 00 0c 00 1c 20 8b ba 98 7f 28 b7"
+		    "41 7e 9e 78 dd 73 3d fc 28 79 00 00 00 00 00 00"
+		    "8c 62 27 22 bc 78 b7 fe e6 70 c0 a0 01 00 00 00"
+		    "00 00 00 00 00 00 40 00 a2 e5 78 cb d4 8e b9 89"
+		    "a9 82 3d 55 56 3a f5 27 0f 87 c9 44 90 61 f4 f1"
+		    "15 2b 55 c3 13 c4 1c 38 ae 9b 35 1b 4a 8e 5a 33"
+		    "5d 97 e5 97 2a cb 5a 98",
 		.dir =
-		    "RV:bd6f37:874b8c52a9c350082acea53d65f5c9f1",
+		    "RV:a94880:89cb5f5c5f4c63625236bf24f3daa3d6",
 		.file =
-		    "RV:ad63368f5d0ea2b0eae13fb66aaf:"
-		    "4569d82c334629222226822a9a122b40",
+		    "RV:b9448151e78ce56dbfb2bcc9ff2c:"
+		    "daca131b5f5f8e2d3f8ae112348c10fd",
 		.content =
-		    "02 02 10 00 00 00 00 00 00 00 00 0c 00 00 00 00"
-		    "aa 69 28 9e 5d 0b a4 b2 fb a9 61 f2 62 42 09 8a"
-		    "b1 11 0a bc f9 53 5d 14 80 c2 4f fa",
+		    "03 00 10 00 00 00 00 00 00 00 00 0c 00 00 00 00"
+		    "00 00 00 00 00 00 00 00 5e 76 29 7e 00 00 00 00"
+		    "31 60 6d 32 51 e3 02 ee 78 aa ee 2c c9 d5 c2 ad"
+		    "be 4e 9f 40 e7 89 e3 6f ae fa e2 8d",
 	},
 	// Chacha20 + Poly1305
 	{
 		.metadata =
-		    "02 04 01 1c 00 0c 00 00 8b ba 98 7f 28 b7 41 7e"
-		    "9e 78 dd 73 3d fc 28 79 03 be 5a a3 52 4a 2e 6d"
-		    "78 fc fe de 01 00 00 00 00 00 00 00 00 00 40 00"
-		    "83 2d a5 12 a6 65 e7 27 51 2c bc fa 51 ab 38 68"
-		    "c9 60 7d ba d0 50 8c b8 2a b9 2d a0 cf 2c 84 90"
-		    "d7 11 cb 7c 7f 79 72 ac 07 50 6d 85 8c f2 11 4b",
+		    "03 01 04 00 01 00 0c 00 1c 20 8b ba 98 7f 28 b7"
+		    "41 7e 9e 78 dd 73 3d fc 28 79 00 00 00 00 00 00"
+		    "35 7e 47 03 2b d4 9a 51 87 53 c7 7e 01 00 00 00"
+		    "00 00 00 00 00 00 40 00 75 32 b4 38 f3 91 20 db"
+		    "be 4e 0f 69 54 19 c7 8f e8 3d 7b f7 4d 32 8d 98"
+		    "81 dc 8b ef 4a 62 38 1a 35 c9 6b f6 9c 36 25 ea"
+		    "8c 80 51 ff f7 1a 34 78",
 		.dir =
-		    "RV:f7f6e1:4b55cb97d19524b06caea20a175886f9",
+		    "RV:9d6007:c00e7d6f355480d640252feaaf60a8fd",
 		.file =
-		    "RV:e7fae088fabe78a93fc761709768:"
-		    "a854460567c95aada1efba7cf40c958a",
+		    "RV:8d6c06c2b99f0f2bf67b60512b2f:"
+		    "b3ffe41e1736afedd2f92b5194bbd8ca",
 		.content =
-		    "02 04 10 00 00 00 00 00 00 00 00 0c 00 00 00 00"
-		    "e0 f0 fe 99 fa bb 7e ab 2e 8f 3f 34 87 b2 a5 b4"
-		    "b4 c4 04 e9 9c 30 7a 7d f1 2c 25 a5",
+		    "03 00 10 00 00 00 00 00 00 00 00 0c 00 00 00 00"
+		    "00 00 00 00 00 00 00 00 5e 76 29 ed 00 00 00 00"
+		    "43 be 59 db 00 87 76 93 63 23 98 7f fc a5 bc 63"
+		    "8a 66 18 d3 b9 9a 09 29 e7 33 3e 15",
 	},
 };
 
