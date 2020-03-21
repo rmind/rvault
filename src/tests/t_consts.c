@@ -46,13 +46,15 @@
 static const struct test_case {
 	crypto_cipher_t	cipher;
 	const char *	iv;
-	const char *	aetag;
-	const char *	aad;
+	const char *	exp_aetag;
 	const char *	expecting;
 } test_cases[] = {
 	{
 		.cipher = AES_256_CBC,
 		.iv = TEST_IV_128,
+		.exp_aetag =
+		    "f4 42 5c c9 fb 5e 35 27 30 ba 26 2e 9f 8b a8 29"
+		    "70 09 99 9c 56 17 93 67 e0 0c f1 8a bf 14 0b 15",
 		.expecting =
 		    "ee c1 39 07 55 68 49 1e e8 ef 71 d4 ac bd bf 43"
 		    "63 b1 16 66 a8 c6 6e c8 a1 50 18 66 ff e8 87 e5"
@@ -61,7 +63,8 @@ static const struct test_case {
 	{
 		.cipher = AES_256_GCM,
 		.iv = TEST_IV_96,
-		.aetag = "5e 5c fd 54 fb 13 c2 66 6b f0 23 57 d6 d7 5f c2",
+		.exp_aetag =
+		    "a2 e5 6b 59 17 51 38 a3 b3 70 49 d7 b3 62 a1 3e",
 		.expecting =
 		    "3e 79 81 60 b5 33 23 fc 0b 10 cd fc 0c c8 41 cb"
 		    "67 fd d7 35 a6 e8 5b 56 c4 53 ca 35 54 92 43 2a"
@@ -70,6 +73,9 @@ static const struct test_case {
 	{
 		.cipher = CHACHA20,
 		.iv = TEST_IV_128,
+		.exp_aetag =
+		    "77 f4 09 74 5a 64 e9 62 e3 7c 6f cf 85 73 ac f7"
+		    "5e 0f cb ae 7b 3b 28 30 62 37 ad 5b e3 5d 22 0b",
 		.expecting =
 		    "6e 3b 10 b5 3f 40 58 cb 5e db 8e bc d2 fe 4b cc"
 		    "dc 0a 64 e5 b5 4a 10 50 cc fd b0 da 9c 5a bc 60"
@@ -78,7 +84,8 @@ static const struct test_case {
 	{
 		.cipher = CHACHA20_POLY1305,
 		.iv = TEST_IV_96,
-		.aetag = "73 eb e8 c8 13 24 ff 28 f8 b4 05 3a 03 15 81 ed",
+		.exp_aetag =
+		    "3d 9f a9 a9 76 86 01 25 8d 00 c8 b7 a3 02 74 59",
 		.expecting =
 		    "cc e3 8e bf 97 6e c2 c0 69 33 db 5c f3 b2 2b 23"
 		    "e8 9d 25 5c 8f b5 24 00 45 98 6c de d0 6d 3a c5"
@@ -106,48 +113,38 @@ test_kdf(void)
 
 static void
 test_crypto(crypto_cipher_t c, const char *iv_str, const char *tag_str,
-    const char *aad_str, const char *exp_str)
+    const char *exp_str)
 {
 	uint8_t buf[TEST_TEXT_LEN * 2];
-	size_t ivlen, keylen, akeylen, tmplen, explen;
-	void *key, *akey, *iv, *tmpbuf, *exp_data;
+	size_t ivlen, keylen, akeylen, taglen, explen;
+	void *key, *akey, *iv, *exp_aetag, *exp_data;
 	ssize_t nbytes, ret;
-	crypto_t *cf;
+	const void *aetag;
+	crypto_t *crypto;
 
-	cf = crypto_create(c, CRYPTO_HMAC_PRIMARY);
-	assert(cf != NULL);
+	crypto = crypto_create(c, CRYPTO_HMAC_PRIMARY);
+	assert(crypto != NULL);
 
 	iv = hex_readmem_arbitrary(iv_str, strlen(iv_str), &ivlen);
-	ret = crypto_set_iv(cf, iv, ivlen);
+	ret = crypto_set_iv(crypto, iv, ivlen);
 	assert(ret == 0);
 	free(iv);
 
 	key = hex_readmem_arbitrary(TEST_KEY, strlen(TEST_KEY), &keylen);
-	ret = crypto_set_key(cf, key, keylen);
+	ret = crypto_set_key(crypto, key, keylen);
 	assert(ret == 0);
 	free(key);
 
 	akey = hex_readmem_arbitrary(TEST_AKEY, strlen(TEST_AKEY), &akeylen);
-	ret = crypto_set_authkey(cf, akey, akeylen);
+	ret = crypto_set_authkey(crypto, akey, akeylen);
 	assert(ret == 0);
 	free(akey);
 
-	if (tag_str) {
-		tmpbuf = hex_readmem_arbitrary(tag_str, strlen(tag_str), &tmplen);
-		ret = crypto_set_aetag(cf, tmpbuf, tmplen);
-		assert(ret == 0);
-		free(tmpbuf);
-	}
+	ret = crypto_set_aad(crypto, TEST_AAD, strlen(TEST_AAD));
+	assert(ret == 0);
 
-	if (aad_str) {
-		tmpbuf = hex_readmem_arbitrary(aad_str, strlen(aad_str), &tmplen);
-		ret = crypto_set_aad(cf, tmpbuf, tmplen);
-		assert(ret == 0);
-		free(tmpbuf);
-	}
-
-	nbytes = crypto_encrypt(cf, TEST_TEXT, TEST_TEXT_LEN,
-	    buf, crypto_get_buflen(cf, TEST_TEXT_LEN));
+	nbytes = crypto_encrypt(crypto, TEST_TEXT, TEST_TEXT_LEN,
+	    buf, crypto_get_buflen(crypto, TEST_TEXT_LEN));
 	assert(nbytes > 0);
 
 	exp_data = hex_readmem_arbitrary(exp_str, strlen(exp_str), &explen);
@@ -155,7 +152,12 @@ test_crypto(crypto_cipher_t c, const char *iv_str, const char *tag_str,
 	assert(memcmp(exp_data, buf, explen) == 0);
 	free(exp_data);
 
-	crypto_destroy(cf);
+	exp_aetag = hex_readmem_arbitrary(tag_str, strlen(tag_str), &taglen);
+	aetag = crypto_get_aetag(crypto, &taglen);
+	assert(memcmp(exp_aetag, aetag, taglen) == 0);
+	free(exp_aetag);
+
+	crypto_destroy(crypto);
 }
 
 int
@@ -165,7 +167,7 @@ main(void)
 
 	for (unsigned i = 0; i < __arraycount(test_cases); i++) {
 		const struct test_case *t = &test_cases[i];
-		test_crypto(t->cipher, t->iv, t->aetag, t->aad, t->expecting);
+		test_crypto(t->cipher, t->iv, t->exp_aetag, t->expecting);
 	}
 
 	puts("ok");
