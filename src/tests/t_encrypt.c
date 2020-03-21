@@ -40,23 +40,60 @@ get_crypto(crypto_cipher_t c, void **iv, size_t *ivlen, const char *passphrase)
 }
 
 static void
+test_corrupted_dec(crypto_t *crypto, const void *inbuf, size_t inlen,
+    void *outbuf, size_t outlen, const void *ae_tag, size_t aetaglen)
+{
+	unsigned char c_aad[TEST_AAD_LEN];
+	unsigned char c_ae_tag[aetaglen];
+	int ret;
+
+	memcpy(c_aad, TEST_AAD, TEST_AAD_LEN);
+	c_aad[0]++;
+
+	memcpy(c_ae_tag, ae_tag, aetaglen);
+	c_ae_tag[0]++;
+
+	/*
+	 * 1) Valid AAD, but invalid AE tag.
+	 */
+	ret = crypto_set_aad(crypto, TEST_AAD, TEST_AAD_LEN);
+	assert(ret == 0);
+
+	ret = crypto_set_aetag(crypto, c_ae_tag, aetaglen);
+	assert(ret == 0);
+
+	ret = crypto_decrypt(crypto, inbuf, inlen, outbuf, outlen);
+	assert(ret == -1);
+
+	/*
+	 * 2) Invalid AAD, but valid AE tag.
+	 */
+	ret = crypto_set_aad(crypto, c_aad, TEST_AAD_LEN);
+	assert(ret == 0);
+
+	ret = crypto_set_aetag(crypto, ae_tag, aetaglen);
+	assert(ret == 0);
+
+	ret = crypto_decrypt(crypto, inbuf, inlen, outbuf, outlen);
+	assert(ret == -1);
+}
+
+static void
 test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
     const char *passphrase)
 {
 	crypto_t *c_enc, *c_dec;
-	char *dec_buf, *enc_buf;
+	char *dec_buf, *enc_buf, *ae_tag;
 	size_t ivlen, buflen, aetaglen;
-	unsigned char *ae_tag;
 	const void *tmpbuf;
 	ssize_t ret, nbytes;
 	void *iv = NULL;
-	char aad = '$';
 
 	/*
 	 * Create a crypto object, get a buffer and encrypt.
 	 */
 	c_enc = get_crypto(c, &iv, &ivlen, passphrase);
-	ret = crypto_set_aad(c_enc, &aad, sizeof(aad));
+	ret = crypto_set_aad(c_enc, TEST_AAD, TEST_AAD_LEN);
 	assert(ret == 0);
 
 	buflen = crypto_get_buflen(c_enc, datalen);
@@ -78,37 +115,24 @@ test_encdec(crypto_cipher_t c, const void *data, const size_t datalen,
 	/*
 	 * Create another crypto object; we want separate crypto objects
 	 * for encryption/decryption to rule out any state re-use bugs.
-	 *
-	 * Also, get another buffer.  Attempt to decrypt with invalid
-	 * AAD and AE tag.  Both attempts must fail.
+	 * Also, get another buffer.
 	 */
 	c_dec = get_crypto(c, &iv, &ivlen, passphrase);
+	buflen = crypto_get_buflen(c_dec, datalen);
 	dec_buf = calloc(1, buflen);
 	assert(dec_buf != NULL);
 
-	ret = crypto_set_aad(c_dec, &aad, sizeof(aad));
+	/*
+	 * Verify that decrypting with invalid AAD or AE tag fails.
+	 */
+	test_corrupted_dec(c_dec, enc_buf, nbytes, dec_buf,
+	    buflen, ae_tag, aetaglen);
+
+	/* Set the valid ADD and AE tag. */
+	ret = crypto_set_aad(c_dec, TEST_AAD, TEST_AAD_LEN);
 	assert(ret == 0);
 
-	ae_tag[0]++; // "corrupt" AE tag
 	ret = crypto_set_aetag(c_dec, ae_tag, aetaglen);
-	assert(ret == 0);
-
-	ret = crypto_decrypt(c_dec, enc_buf, nbytes, dec_buf, buflen);
-	assert(ret == -1);
-
-	ae_tag[0]--; // restore the AE tag
-	ret = crypto_set_aetag(c_dec, ae_tag, aetaglen);
-	assert(ret == 0);
-
-	aad++; // "corrupt" the AAD
-	ret = crypto_set_aad(c_dec, &aad, sizeof(aad));
-	assert(ret == 0);
-
-	ret = crypto_decrypt(c_dec, enc_buf, nbytes, dec_buf, buflen);
-	assert(ret == -1);
-
-	aad--; // restore the AAD
-	ret = crypto_set_aad(c_dec, &aad, sizeof(aad));
 	assert(ret == 0);
 
 	/*

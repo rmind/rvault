@@ -77,6 +77,10 @@ openssl_crypto_create(crypto_t *crypto)
 		 */
 		crypto->tlen = 16;
 		break;
+	case CHACHA20:
+		/* Override OpenSSL to use 96-bit nonce (RFC 7539). */
+		crypto->ilen = 12;
+		break;
 	default:
 		crypto->tlen = 0;
 	}

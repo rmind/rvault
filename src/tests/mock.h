@@ -10,7 +10,9 @@
 
 #define	TEST_TEXT	"the quick brown fox jumped over the lazy dog"
 #define	TEST_TEXT_LEN	(sizeof(TEST_TEXT) - 1)
+
 #define	TEST_AAD	"le vif"
+#define	TEST_AAD_LEN	(sizeof(TEST_AAD) - 1)
 
 #define	TEST_UUID	"a4fcd889-b7be-404a-ae15-2840c22f4b9a"
 

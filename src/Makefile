@@ -133,7 +133,7 @@ LDFLAGS+=	-lmbedcrypto
 endif
 
 ifeq ($(USE_SODIUM),1)
-CFLAGS+=	$(shell pkg-config --cflags libsodium)
+CFLAGS+=	-DUSE_AE_CIPHERS_ONLY $(shell pkg-config --cflags libsodium)
 LDFLAGS+=	$(shell pkg-config --libs libsodium)
 endif
 
@@ -245,10 +245,10 @@ t_%: $(TEST_OBJS)
 	$(CC) $(CFLAGS) $^ tests/$@.c -o $@ $(LDFLAGS)
 
 tests: $(TESTS)
-	@ for T in $(TESTS); do echo ./$$T; ./$$T; done
+	@ set -e && for T in $(TESTS); do echo ./$$T; ./$$T; done
 
 lua-tests:
-	@ for T in lua/*.lua; do echo ./$$T; lua5.3 ./$$T; done
+	@ set -e && for T in lua/*.lua; do echo ./$$T; lua5.3 ./$$T; done
 
 #
 # Debugging

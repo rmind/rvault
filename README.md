@@ -107,7 +107,9 @@ simplicity.
 ## Dependencies
 
 Mandatory:
-- OpenSSL 1.1 or newer
+- OpenSSL (>= 1.1) or
+[libsodium](https://download.libsodium.org/doc/) or
+[mbed TLS](https://en.wikipedia.org/wiki/Mbed_TLS)
 - FUSE (libfuse and/or system support)
 - libcurl
 

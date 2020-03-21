@@ -190,10 +190,10 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	const size_t tag_len = crypto_get_aetaglen(vault->crypto);
 	fileobj_hdr_t *hdr, *ae_hdr = NULL;
 	const void *enc_buf, *ae_tag;
+	size_t edata_len, buflen;
 	ssize_t nbytes = -1;
 	sbuffer_t tmpsbuf;
 	void *buf = NULL;
-	size_t buf_len;
 
 	/*
 	 * Memory-map the data file.  Perform basic integrity checks,
@@ -214,8 +214,8 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 		errno = EIO;
 		goto out;
 	}
-	buf_len = FILEOBJ_EDATA_LEN(hdr);
-	if (buf_len == 0) {
+	edata_len = FILEOBJ_EDATA_LEN(hdr);
+	if (edata_len == 0) {
 		goto out;
 	}
 
@@ -248,12 +248,13 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	 * verification will be performed by the crypto_decrypt() primitive.
 	 */
 	memset(&tmpsbuf, 0, sizeof(sbuffer_t));
-	if ((buf = sbuffer_alloc(&tmpsbuf, buf_len)) == NULL) {
+	buflen = crypto_get_buflen(vault->crypto, edata_len);
+	if ((buf = sbuffer_alloc(&tmpsbuf, buflen)) == NULL) {
 		app_log(LOG_ERR, "buffer allocation failed");
 		goto out;
 	}
 	enc_buf = FILEOBJ_HDR_TO_DATA(hdr);
-	nbytes = crypto_decrypt(vault->crypto, enc_buf, buf_len, buf, buf_len);
+	nbytes = crypto_decrypt(vault->crypto, enc_buf, edata_len, buf, buflen);
 	if (nbytes == -1 || FILEOBJ_DATA_LEN(hdr) != (size_t)nbytes) {
 		app_log(LOG_ERR, "decryption failed");
 		sbuffer_free(sbuf);
