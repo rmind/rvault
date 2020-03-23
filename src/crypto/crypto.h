@@ -21,7 +21,7 @@ typedef enum {
 	CIPHER_NONE		= 0,
 	AES_256_CBC		= 1,
 	AES_256_GCM		= 2,
-	CHACHA20		= 3,
+	CIPHER_RESERVED0	= 3,
 	CHACHA20_POLY1305	= 4,
 } crypto_cipher_t;
 

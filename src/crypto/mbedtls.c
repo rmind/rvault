@@ -29,8 +29,6 @@ get_mbedtls_cipher(crypto_cipher_t c)
 		return MBEDTLS_CIPHER_AES_256_CBC;
 	case AES_256_GCM:
 		return MBEDTLS_CIPHER_AES_256_GCM;
-	case CHACHA20:
-		return MBEDTLS_CIPHER_CHACHA20;
 	case CHACHA20_POLY1305:
 		return MBEDTLS_CIPHER_CHACHA20_POLY1305;
 	default:
@@ -98,7 +96,6 @@ mbedtls_crypto_encrypt(const crypto_t *crypto,
 
 	switch (crypto->cipher) {
 	case AES_256_CBC:
-	case CHACHA20:
 		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->ilen,
 		    inbuf, inlen, outbuf, &nbytes);
 		break;
@@ -134,7 +131,6 @@ mbedtls_crypto_decrypt(const crypto_t *crypto,
 
 	switch (crypto->cipher) {
 	case AES_256_CBC:
-	case CHACHA20:
 		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->ilen,
 		    inbuf, inlen, outbuf, &nbytes);
 		break;

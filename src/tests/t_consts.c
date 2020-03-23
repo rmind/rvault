@@ -20,20 +20,6 @@
 #include "mock.h"
 #include "utils.h"
 
-/*
- * AES 256 + CBC mode: IV is 16 bytes; key is 32 bytes.
- * Chacha20: IV is 16 bytes (96 bit nonce + 32 bit counter); key is 32 bytes.
- *
- * cipher="-aes-256-cbc "
- * cipher="-chacha20"
- *
- * printf "the quick brown fox jumped over the lazy dog" | \
- *   openssl enc $cipher \
- *   -iv 508c39cf1b4a706a219ab837981ba4b0 \
- *   -K 0705b45c2be368b6aadf21656a89dad8fed6172170b7e78f638a650dab05d7ea | \
- *   od -t x1
- */
-
 #define	TEST_KEY \
     "0705b45c2be368b6aadf21656a89dad8fed6172170b7e78f638a650dab05d7ea"
 
@@ -62,19 +48,6 @@ static const struct test_case {
 		    "63 b1 16 66 a8 c6 6e c8 a1 50 18 66 ff e8 87 e5"
 		    "10 f5 4b 3c 6e c2 3e 1a 09 e3 d7 e7 53 f9 b1 61",
 	},
-#if 0
-	{
-		.cipher = CHACHA20,
-		.iv = TEST_IV_96,
-		.exp_aetag =
-		    "4c 3b d9 61 ba e5 61 66 0f fb 50 76 ce 46 29 9e"
-		    "d5 9e d5 2f 2d d7 7f 07 97 36 c5 1d 12 af 96 40",
-		.expecting =
-		    "74 71 33 58 54 5a 74 1f 25 f1 13 85 6b fd ca 15"
-		    "d7 34 5c 4f 80 39 d5 5c ba 0d f8 9a d5 ae b4 98"
-		    "44 49 6d a6 99 8e a3 bb a5 3f 52 97",
-	},
-#endif
 #endif
 	{
 		.cipher = AES_256_GCM,

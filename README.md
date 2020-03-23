@@ -20,8 +20,8 @@ Key features and cryptography:
 - [scrypt](https://en.wikipedia.org/wiki/Scrypt)
 [RFC 7914](https://tools.ietf.org/html/rfc7914)
 for the key derivation function
-([KDF](https://en.wikipedia.org/wiki/Key_derivation_function));
-[AES 256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) or
+([KDF](https://en.wikipedia.org/wiki/Key_derivation_function)).
+- [AES 256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) or
 [Chacha20](https://en.wikipedia.org/wiki/ChaCha20) cipher with
 [AE](https://en.wikipedia.org/wiki/Authenticated_encryption).
 - Authentication with the server using
