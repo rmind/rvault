@@ -43,9 +43,6 @@ get_openssl_cipher(crypto_cipher_t c)
 	case AES_256_GCM:
 		cipher = EVP_aes_256_gcm();
 		break;
-	case CHACHA20:
-		cipher = EVP_chacha20();
-		break;
 	case CHACHA20_POLY1305:
 		/* Note: OpenSSL uses IETF (RFC 7539) variation. */
 		cipher = EVP_chacha20_poly1305();
@@ -76,10 +73,6 @@ openssl_crypto_create(crypto_t *crypto)
 		 * Both ciphers use 128-bit authentication tag.
 		 */
 		crypto->tlen = 16;
-		break;
-	case CHACHA20:
-		/* Override OpenSSL to use 96-bit nonce (RFC 7539). */
-		crypto->ilen = 12;
 		break;
 	default:
 		crypto->tlen = 0;

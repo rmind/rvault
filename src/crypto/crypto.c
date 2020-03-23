@@ -47,14 +47,11 @@ static const struct {
 	const char *		name;
 	crypto_cipher_t		id;
 } cipher_str2id[] = {
-	{ "aes-256-gcm",	AES_256_GCM		},
-	{ "chacha20-poly1305",	CHACHA20_POLY1305	},
 #if !defined(USE_AE_CIPHERS_ONLY)
 	{ "aes-256-cbc",	AES_256_CBC		},
-#if 0
-	{ "chacha20",		CHACHA20		},
 #endif
-#endif
+	{ "aes-256-gcm",	AES_256_GCM		},
+	{ "chacha20-poly1305",	CHACHA20_POLY1305	},
 	{ NULL,			CIPHER_NONE		},
 };
 
