@@ -1,4 +1,4 @@
-# rvault
+<p align="center"><a href="https://github.com/rmind/rvault"><img src="./misc/rvault-light-t.png" width="100px" border="0" alt="rvault" /></a></p>
 
 [![Build Status](https://travis-ci.org/rmind/rvault.svg?branch=master)](https://travis-ci.org/rmind/rvault)
 
@@ -24,6 +24,7 @@ for the key derivation function
 - [AES 256](https://en.wikipedia.org/wiki/Advanced_Encryption_Standard) or
 [Chacha20](https://en.wikipedia.org/wiki/ChaCha20) cipher with
 [AE](https://en.wikipedia.org/wiki/Authenticated_encryption).
+ISO/IEC 19772:2009 compliant.
 - Authentication with the server using
 [TOTP](https://en.wikipedia.org/wiki/Time-based_One-time_Password_algorithm)
 ([RFC 6238](https://tools.ietf.org/html/rfc6238)).
