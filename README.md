@@ -1,13 +1,13 @@
-<p align="center"><a href="https://github.com/rmind/rvault"><img src="./misc/rvault-light-t.png" width="100px" border="0" alt="rvault" /></a></p>
+# rvault
 
 [![Build Status](https://travis-ci.org/rmind/rvault.svg?branch=master)](https://travis-ci.org/rmind/rvault)
-
-# rvault
 
 **rvault** is a secure and authenticated store for secrets (passwords,
 keys, certificates) and small documents.  It uses _envelope encryption_
 with one-time password (OTP) authentication.  The vault can be operated
 as a file system in userspace.
+
+<p align="center"><a href="https://github.com/rmind/rvault"><img src="./misc/rvault-light-t.png" width="100px" border="0" alt="rvault" /></a></p>
 
 It is written in C11 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
