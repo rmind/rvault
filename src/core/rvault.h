@@ -14,7 +14,7 @@
 #include "crypto.h"
 
 #define	APP_NAME		"rvault"
-#define	APP_PROJ_VER		"0.1"
+#define	APP_PROJ_VER		"0.2"
 
 struct fileobj;
 
