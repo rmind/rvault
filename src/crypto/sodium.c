@@ -16,7 +16,7 @@
 #include <sodium.h>
 
 #define	__CRYPTO_PRIVATE
-#include "crypto.h"
+#include "crypto_impl.h"
 #include "utils.h"
 
 static int
@@ -67,19 +67,19 @@ sodium_crypto_encrypt(const crypto_t *crypto,
 	switch (crypto->cipher) {
 	case AES_256_GCM:
 		ret = crypto_aead_aes256gcm_encrypt_detached(outbuf,
-		    crypto->tag, NULL, inbuf, inlen, NULL, 0, NULL,
-		    crypto->iv, crypto->key);
+		    crypto->tag, NULL, inbuf, inlen, crypto->aad,
+		    crypto->aad_len, NULL, crypto->iv, crypto->key);
 		break;
 	case CHACHA20_POLY1305:
 		ret = crypto_aead_chacha20poly1305_ietf_encrypt_detached(outbuf,
-		    crypto->tag, NULL, inbuf, inlen, NULL, 0, NULL,
-		    crypto->iv, crypto->key);
+		    crypto->tag, NULL, inbuf, inlen, crypto->aad,
+		    crypto->aad_len, NULL, crypto->iv, crypto->key);
 		break;
 	default:
 		abort();
 	}
 
-	return (ret == 0) ? inlen : -1;
+	return (ret == 0) ? (ssize_t)inlen : -1;
 }
 
 /*
@@ -94,19 +94,19 @@ sodium_crypto_decrypt(const crypto_t *crypto,
 	switch (crypto->cipher) {
 	case AES_256_GCM:
 		ret = crypto_aead_aes256gcm_decrypt_detached(outbuf,
-		    NULL, inbuf, inlen, crypto->tag, NULL, 0,
-		    crypto->iv, crypto->key);
+		    NULL, inbuf, inlen, crypto->tag, crypto->aad,
+		    crypto->aad_len, crypto->iv, crypto->key);
 		break;
 	case CHACHA20_POLY1305:
 		ret = crypto_aead_chacha20poly1305_ietf_decrypt_detached(outbuf,
-		    NULL, inbuf, inlen, crypto->tag, NULL, 0,
-		    crypto->iv, crypto->key);
+		    NULL, inbuf, inlen, crypto->tag, crypto->aad,
+		    crypto->aad_len, crypto->iv, crypto->key);
 		break;
 	default:
 		abort();
 	}
 
-	return (ret == 0) ? inlen : -1;
+	return (ret == 0) ? (ssize_t)inlen : -1;
 }
 
 static ssize_t
@@ -118,7 +118,7 @@ sodium_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 	switch (crypto->hmac_id) {
 	case HMAC_SHA256:
 		if (crypto_auth_hmacsha256_init(&sha256,
-		    crypto->auth_key, crypto->alen) == -1)
+		    crypto->auth_key, crypto->alen) == -1) {
 			return -1;
 		}
 		if (aad && crypto_auth_hmacsha256_update(&sha256,

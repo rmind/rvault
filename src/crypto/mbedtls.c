@@ -66,6 +66,7 @@ mbedtls_crypto_create(crypto_t *crypto)
 		break;
 	default:
 		crypto->tlen = 0;
+		break;
 	}
 	return 0;
 }
@@ -104,15 +105,14 @@ mbedtls_crypto_encrypt(const crypto_t *crypto,
 	case AES_256_GCM:
 	case CHACHA20_POLY1305:
 		ret = mbedtls_cipher_auth_encrypt(ctx,
-		    crypto->iv, crypto->ilen, NULL, 0,
-		    inbuf, inlen, outbuf, &nbytes,
-		    crypto->tag, crypto->tlen);
+		    crypto->iv, crypto->ilen, crypto->aad, crypto->aad_len,
+		    inbuf, inlen, outbuf, &nbytes, crypto->tag, crypto->tlen);
 		break;
 	default:
 		abort();
 	}
 
-	return (ret == 0) ? nbytes : -1;
+	return (ret == 0) ? (ssize_t)nbytes : -1;
 }
 
 /*
@@ -141,15 +141,14 @@ mbedtls_crypto_decrypt(const crypto_t *crypto,
 	case AES_256_GCM:
 	case CHACHA20_POLY1305:
 		ret = mbedtls_cipher_auth_decrypt(ctx,
-		    crypto->iv, crypto->ilen, NULL, 0,
-		    inbuf, inlen, outbuf, &nbytes,
-		    crypto->tag, crypto->tlen);
+		    crypto->iv, crypto->ilen, crypto->aad, crypto->aad_len,
+		    inbuf, inlen, outbuf, &nbytes, crypto->tag, crypto->tlen);
 		break;
 	default:
 		abort();
 	}
 
-	return (ret == 0) ? nbytes : -1;
+	return (ret == 0) ? (ssize_t)nbytes : -1;
 }
 
 static ssize_t
@@ -157,12 +156,13 @@ mbedtls_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
     const void *aad, size_t aad_len, unsigned char buf[static HMAC_MAX_BUFLEN])
 {
 	const mbedtls_md_info_t *md;
-	mbedtls_md_type_t md_type;
-	ssize_t nbytes = -1;
+	mbedtls_md_context_t ctx;
+	ssize_t ret = -1;
+	size_t nbytes;
 
 	switch (crypto->hmac_id) {
 	case HMAC_SHA256:
-		md_type = MBEDTLS_MD_SHA256;
+		md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
 		nbytes = 32;
 		break;
 	default:
@@ -171,14 +171,21 @@ mbedtls_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 	}
 	ASSERT(nbytes <= HMAC_MAX_BUFLEN);
 
-	if ((md = mbedtls_md_info_from_type(md_type)) == NULL) {
-		return -1;
-	}
-	if (mbedtls_md_hmac(md, crypto->auth_key, crypto->alen,
-	    data, dlen, buf) != 0) {
-		return -1;
-	}
-	return nbytes;
+	mbedtls_md_init(&ctx);
+	if (mbedtls_md_setup(&ctx, md, 1) != 0)
+		goto out;
+	if (mbedtls_md_hmac_starts(&ctx, crypto->auth_key, crypto->alen) != 0)
+		goto out;
+	if (aad && mbedtls_md_hmac_update(&ctx, aad, aad_len) != 0)
+		goto out;
+	if (data && mbedtls_md_hmac_update(&ctx, data, dlen) != 0)
+		goto out;
+	if (mbedtls_md_hmac_finish(&ctx, buf) != 0)
+		goto out;
+	ret = nbytes;
+out:
+	mbedtls_md_free(&ctx);
+	return ret;
 }
 
 static void __constructor(102)

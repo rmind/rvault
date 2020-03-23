@@ -46,9 +46,11 @@
 static const struct test_case {
 	crypto_cipher_t	cipher;
 	const char *	iv;
+	const char *	exp_hmac;
 	const char *	exp_aetag;
 	const char *	expecting;
 } test_cases[] = {
+#if !defined(USE_AE_CIPHERS_ONLY)
 	{
 		.cipher = AES_256_CBC,
 		.iv = TEST_IV_128,
@@ -60,6 +62,20 @@ static const struct test_case {
 		    "63 b1 16 66 a8 c6 6e c8 a1 50 18 66 ff e8 87 e5"
 		    "10 f5 4b 3c 6e c2 3e 1a 09 e3 d7 e7 53 f9 b1 61",
 	},
+#if 0
+	{
+		.cipher = CHACHA20,
+		.iv = TEST_IV_96,
+		.exp_aetag =
+		    "4c 3b d9 61 ba e5 61 66 0f fb 50 76 ce 46 29 9e"
+		    "d5 9e d5 2f 2d d7 7f 07 97 36 c5 1d 12 af 96 40",
+		.expecting =
+		    "74 71 33 58 54 5a 74 1f 25 f1 13 85 6b fd ca 15"
+		    "d7 34 5c 4f 80 39 d5 5c ba 0d f8 9a d5 ae b4 98"
+		    "44 49 6d a6 99 8e a3 bb a5 3f 52 97",
+	},
+#endif
+#endif
 	{
 		.cipher = AES_256_GCM,
 		.iv = TEST_IV_96,
@@ -69,17 +85,6 @@ static const struct test_case {
 		    "3e 79 81 60 b5 33 23 fc 0b 10 cd fc 0c c8 41 cb"
 		    "67 fd d7 35 a6 e8 5b 56 c4 53 ca 35 54 92 43 2a"
 		    "d0 b3 95 56 54 c2 97 ba 51 80 fc e7",
-	},
-	{
-		.cipher = CHACHA20,
-		.iv = TEST_IV_128,
-		.exp_aetag =
-		    "77 f4 09 74 5a 64 e9 62 e3 7c 6f cf 85 73 ac f7"
-		    "5e 0f cb ae 7b 3b 28 30 62 37 ad 5b e3 5d 22 0b",
-		.expecting =
-		    "6e 3b 10 b5 3f 40 58 cb 5e db 8e bc d2 fe 4b cc"
-		    "dc 0a 64 e5 b5 4a 10 50 cc fd b0 da 9c 5a bc 60"
-		    "75 b8 a8 aa a0 40 ea 6a c9 ec fd bf",
 	},
 	{
 		.cipher = CHACHA20_POLY1305,
@@ -98,6 +103,13 @@ static const uint8_t kdf_expected_val[] = {
 	0x45, 0x9d, 0x55, 0xcf, 0x5e, 0x69, 0x61, 0xed
 };
 
+static const uint8_t hmac_expected_val[] = {
+	0x4d, 0x03, 0xf0, 0x02, 0x3f, 0xfb, 0x43, 0x0e,
+	0xb8, 0x2f, 0xe6, 0x4a, 0x60, 0x0b, 0x36, 0x0c,
+	0xc8, 0xbd, 0xeb, 0xf6, 0x0e, 0x71, 0x1f, 0x11,
+	0x8b, 0xd2, 0xfa, 0x9f, 0x4f, 0xb7, 0xe4, 0x6d
+};
+
 ///////////////////////////////////////////////////////////////////////////////
 
 static void
@@ -111,24 +123,16 @@ test_kdf(void)
 	assert(memcmp(buf, kdf_expected_val, sizeof(buf)) == 0);
 }
 
-static void
-test_crypto(crypto_cipher_t c, const char *iv_str, const char *tag_str,
-    const char *exp_str)
+static crypto_t *
+test_get_crypto(crypto_cipher_t c, crypto_hmac_t hmac_id)
 {
-	uint8_t buf[TEST_TEXT_LEN * 2];
-	size_t ivlen, keylen, akeylen, taglen, explen;
-	void *key, *akey, *iv, *exp_aetag, *exp_data;
-	ssize_t nbytes, ret;
-	const void *aetag;
 	crypto_t *crypto;
+	size_t keylen, akeylen;
+	void *key, *akey;
+	int ret;
 
-	crypto = crypto_create(c, CRYPTO_HMAC_PRIMARY);
+	crypto = crypto_create(c, hmac_id);
 	assert(crypto != NULL);
-
-	iv = hex_readmem_arbitrary(iv_str, strlen(iv_str), &ivlen);
-	ret = crypto_set_iv(crypto, iv, ivlen);
-	assert(ret == 0);
-	free(iv);
 
 	key = hex_readmem_arbitrary(TEST_KEY, strlen(TEST_KEY), &keylen);
 	ret = crypto_set_key(crypto, key, keylen);
@@ -140,6 +144,45 @@ test_crypto(crypto_cipher_t c, const char *iv_str, const char *tag_str,
 	assert(ret == 0);
 	free(akey);
 
+	return crypto;
+}
+
+static void
+test_hmac(void)
+{
+	uint8_t hmac[HMAC_MAX_BUFLEN];
+	crypto_t *crypto;
+	ssize_t nbytes;
+
+	crypto = test_get_crypto(CRYPTO_CIPHER_PRIMARY, CRYPTO_HMAC_PRIMARY);
+	assert(crypto != NULL);
+
+	nbytes = crypto_hmac(crypto, TEST_TEXT, TEST_TEXT_LEN, hmac);
+	assert(crypto_hmac_len(CRYPTO_HMAC_PRIMARY) == nbytes);
+	assert((ssize_t)sizeof(hmac_expected_val) == nbytes);
+	assert(memcmp(hmac, hmac_expected_val, nbytes) == 0);
+
+	crypto_destroy(crypto);
+}
+
+static void
+test_crypto(const struct test_case *t)
+{
+	uint8_t buf[TEST_TEXT_LEN * 2];
+	size_t ivlen, taglen, explen;
+	void *iv, *exp_aetag, *exp_data;
+	ssize_t nbytes, ret;
+	const void *aetag;
+	crypto_t *crypto;
+
+	crypto = test_get_crypto(t->cipher, CRYPTO_HMAC_PRIMARY);
+	assert(crypto != NULL);
+
+	iv = hex_readmem_arbitrary(t->iv, strlen(t->iv), &ivlen);
+	ret = crypto_set_iv(crypto, iv, ivlen);
+	assert(ret == 0);
+	free(iv);
+
 	ret = crypto_set_aad(crypto, TEST_AAD, strlen(TEST_AAD));
 	assert(ret == 0);
 
@@ -147,12 +190,14 @@ test_crypto(crypto_cipher_t c, const char *iv_str, const char *tag_str,
 	    buf, crypto_get_buflen(crypto, TEST_TEXT_LEN));
 	assert(nbytes > 0);
 
-	exp_data = hex_readmem_arbitrary(exp_str, strlen(exp_str), &explen);
+	exp_data = hex_readmem_arbitrary(t->expecting,
+	    strlen(t->expecting), &explen);
 	assert(exp_data && (size_t)nbytes == explen);
 	assert(memcmp(exp_data, buf, explen) == 0);
 	free(exp_data);
 
-	exp_aetag = hex_readmem_arbitrary(tag_str, strlen(tag_str), &taglen);
+	exp_aetag = hex_readmem_arbitrary(t->exp_aetag,
+	    strlen(t->exp_aetag), &taglen);
 	aetag = crypto_get_aetag(crypto, &taglen);
 	assert(memcmp(exp_aetag, aetag, taglen) == 0);
 	free(exp_aetag);
@@ -164,10 +209,11 @@ int
 main(void)
 {
 	test_kdf();
+	test_hmac();
 
 	for (unsigned i = 0; i < __arraycount(test_cases); i++) {
 		const struct test_case *t = &test_cases[i];
-		test_crypto(t->cipher, t->iv, t->exp_aetag, t->expecting);
+		test_crypto(t);
 	}
 
 	puts("ok");

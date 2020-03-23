@@ -26,9 +26,7 @@ function test_crypto(cipher, ae)
   assert(dec_data ~= data)
 end
 
-test_crypto("chacha20")
 test_crypto("aes-256-cbc")
-
 test_crypto("aes-256-gcm")
 test_crypto("chacha20-poly1305")
 

@@ -47,10 +47,14 @@ static const struct {
 	const char *		name;
 	crypto_cipher_t		id;
 } cipher_str2id[] = {
-	{ "aes-256-cbc",	AES_256_CBC		},
 	{ "aes-256-gcm",	AES_256_GCM		},
-	{ "chacha20",		CHACHA20		},
 	{ "chacha20-poly1305",	CHACHA20_POLY1305	},
+#if !defined(USE_AE_CIPHERS_ONLY)
+	{ "aes-256-cbc",	AES_256_CBC		},
+#if 0
+	{ "chacha20",		CHACHA20		},
+#endif
+#endif
 	{ NULL,			CIPHER_NONE		},
 };
 
@@ -94,6 +98,7 @@ crypto_cipher_list(unsigned *nitems)
 			    cipher_str2id[cipher_count].name;
 			cipher_count++;
 		}
+		ASSERT(cipher_count > 0);
 	}
 	*nitems = cipher_count;
 	return cipher_list;
@@ -460,6 +465,7 @@ crypto_encrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
 	}
 out:
 	crypto->aad = NULL;
+	crypto->aad_len = 0;
 	return ret;
 }
 
@@ -501,6 +507,7 @@ crypto_decrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
 	ret = crypto->ops->decrypt(crypto, inbuf, inlen, outbuf, outlen);
 out:
 	crypto->aad = NULL;
+	crypto->aad_len = 0;
 	return ret;
 }
 

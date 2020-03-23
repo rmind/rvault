@@ -117,9 +117,12 @@ mock_get_vault(const char *cipher, char **path)
 	char *base_path = mock_get_vault_dir();
 	char *passphrase = strdup("test");
 	rvault_t *vault;
+	int ret;
 
-	rvault_init(base_path, NULL, passphrase, TEST_UUID,
-	    cipher ? cipher : "aes-256-cbc", NULL, RVAULT_FLAG_NOAUTH);
+	ret = rvault_init(base_path, NULL, passphrase, TEST_UUID,
+	    cipher, NULL, RVAULT_FLAG_NOAUTH);
+	assert(ret == 0);
+
 	vault = rvault_open(base_path, NULL, passphrase);
 	free(passphrase);
 	assert(vault);

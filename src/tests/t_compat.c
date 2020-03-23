@@ -37,7 +37,7 @@ static const struct test_case {
 	/*
 	 * ABI v3
 	 */
-
+#if !defined(USE_AE_CIPHERS_ONLY)
 	// AES 256 + CBC
 	{
 		.metadata =
@@ -63,6 +63,7 @@ static const struct test_case {
 		    "f7 5d fe 8c 48 28 4f 11 67 47 60 83 e4 53 26 db"
 		    "44 76 77 ea ed 3f 9a c4 f9 be 98 e3 e5 84 15 02",
 	},
+#endif
 	// AES 256 + GCM
 	{
 		.metadata =

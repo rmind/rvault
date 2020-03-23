@@ -179,7 +179,7 @@ rvault_pull_key(rvault_t *vault)
 {
 	crypto_t *crypto = vault->crypto;
 	void *ekey = NULL, *rkey = NULL, *akey = NULL, *tag = NULL;
-	size_t clen = 0, blen, tlen, klen;
+	size_t clen = 0, elen, blen, tlen, klen;
 	char *s, *code;
 	http_req_t req;
 	ssize_t rlen;
@@ -219,7 +219,7 @@ rvault_pull_key(rvault_t *vault)
 	/*
 	 * Get the key and the AE tag (if any).
 	 */
-	if (rvault_unhex_aedata(req.buf, &ekey, &blen, &tag, &tlen) == -1) {
+	if (rvault_unhex_aedata(req.buf, &ekey, &elen, &tag, &tlen) == -1) {
 		app_log(LOG_CRIT, APP_NAME": the key received from the "
 		    "server is invalid");
 		goto out;
@@ -234,10 +234,11 @@ rvault_pull_key(rvault_t *vault)
 	/*
 	 * Decrypt one layer using the derived key.
 	 */
+	blen = crypto_get_buflen(crypto, elen);
 	if ((rkey = malloc(blen)) == NULL) {
 		goto out;
 	}
-	if ((rlen = crypto_decrypt(crypto, ekey, blen, rkey, blen)) == -1) {
+	if ((rlen = crypto_decrypt(crypto, ekey, elen, rkey, blen)) == -1) {
 		app_log(LOG_CRIT, APP_NAME": the key received from the "
 		    "server is invalid");
 		goto out;
@@ -259,7 +260,7 @@ rvault_pull_key(rvault_t *vault)
 	ret = 0;
 out:
 	if (ekey) {
-		crypto_memzero(ekey, blen);
+		crypto_memzero(ekey, elen);
 		free(ekey);
 	}
 	if (rkey) {

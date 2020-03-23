@@ -26,18 +26,26 @@ addons:
     - build-essential
     - fakeroot
     - debhelper
+    # crypto libraries:
     - libssl-dev
+    - libsodium-dev
+    - libmbedtls-dev
+    # mandatory dependencies:
     - libscrypt-dev
     - libfuse-dev
     - libcurl4
+    # optional dependencies:
     - libedit-dev
     - libsqlite3-dev
     - liblua5.3-dev
     - lua5.3
+
   homebrew:
     update: true
     packages:
     - openssl@1.1
+    - libsodium
+    - mbedtls
     - libscrypt
     - lua
     casks:
@@ -50,3 +58,6 @@ script:
   - (cd src && make clean && make -j4 && make tests)
   # Run the Lua tests.
   - (cd src && make clean && make -j4 lib && make lua-tests)
+  # Run the tests using mbedtls and libsodium
+  #- (cd src && USE_MBEDTLS=1 make clean && USE_OPENSSL=0 USE_MBEDTLS=1 make tests)
+  - if [ "$(uname -n)" = "x86_64" ]; then (cd src && USE_SODIUM=1 make clean && USE_OPENSSL=0 USE_SODIUM=1 make tests); fi
