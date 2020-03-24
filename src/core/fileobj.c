@@ -348,29 +348,16 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 
 		/*
 		 * If we have enough space since the previous expansion,
-		 * then merely bump the data length.
+		 * then merely bump the data length.  Otherwise, grow
+		 * exponentially.
 		 */
-		if (endoff >= fobj->sbuf.buf_size) {
-			size_t buf_size;
-			void *nbuf;
-
-			/*
-			 * Grow exponentially.  Check for overflow, though.
-			 */
-			if ((nlen << 1) < nlen) {
-				buf_size = nlen;
-			} else {
-				buf_size = nlen << 1;
-			}
-			app_log(LOG_DEBUG, "%s: vnode %p, grow to [%zu]",
-			    __func__, fobj, buf_size);
-
-			nbuf = sbuffer_move(&fobj->sbuf, buf_size);
-			if (nbuf == NULL) {
-				errno = ENOMEM;
-				return -1;
-			}
+		if (endoff >= fobj->sbuf.buf_size &&
+		    sbuffer_move(&fobj->sbuf, nlen, SBUF_GROWEXP) == NULL) {
+			errno = ENOMEM;
+			return -1;
 		}
+		app_log(LOG_DEBUG, "%s: vnode %p, grow to [%zu]",
+		    __func__, fobj, nlen);
 		fobj->len = nlen;
 	}
 	fbuf = fobj->sbuf.buf;
@@ -428,7 +415,7 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	 * Note: if new length is zero, then sbuffer_move() will free the
 	 * old buffer and will return NULL.
 	 */
-	if (len && sbuffer_move(&fobj->sbuf, len) == NULL) {
+	if (len && sbuffer_move(&fobj->sbuf, len, 0) == NULL) {
 		app_elog(LOG_DEBUG, "%s: sbuffer_move() failed", __func__);
 		return -1;
 	}

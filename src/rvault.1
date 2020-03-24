@@ -23,7 +23,7 @@
 .\" OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 .\" SUCH DAMAGE.
 .\"
-.Dd March 21, 2020
+.Dd March 26, 2020
 .Dt RVAULT 1
 .Os
 .Sh NAME
@@ -130,9 +130,11 @@ Delete the secret.
 The given names must not have white spaces.
 The secret will be asked in a prompt.
 .\" ---
-.It Ic mount Oo Fl d Oc Oo Fl f Oc Oo Fl r Ar path Oc Oo Fl s Ar mode Oc Oo Fl h Oc Ar path
+.It Ic mount Oo Fl c Ar 1|0 Oc Oo Fl d Oc Oo Fl f Oc Oo Fl r Ar path Oc Oo Fl s Ar mode Oc Oo Fl h Oc Ar path
 Mount the vault as a FUSE file system at the given path.
 .Bl -tag -width xxxxxxxxx -compact -offset 3n
+.It Fl c | Fl Fl compress Ar 1|0
+Enable or disable (default) compression.
 .It Fl d | Fl Fl debug
 Enable FUSE-level debug logging.
 .It Fl f | Fl Fl foreground

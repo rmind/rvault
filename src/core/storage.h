@@ -8,6 +8,7 @@
 #ifndef	_STORAGE_H_
 #define	_STORAGE_H_
 
+#include "buffer.h"
 #include "utils.h"
 
 /*
@@ -100,6 +101,9 @@ typedef struct {
  * CAUTION: All values must be converted to big-endian for storage.
  */
 
+#define	FILEOBJ_FLAG_CHUNK	(1U << 0)	// file chunking (not yet used)
+#define	FILEOBJ_FLAG_LZ4	(1U << 1)	// use LZ4 compression
+
 typedef struct {
 	uint8_t		ver;
 	uint8_t		flags;
@@ -111,31 +115,23 @@ typedef struct {
 } __attribute__((packed)) fileobj_hdr_t;
 
 #define	FILEOBJ_HDR_LEN		STORAGE_ALIGN(sizeof(fileobj_hdr_t))
+#define	FILEOBJ_LZ4_P(h)	(((h)->flags & FILEOBJ_FLAG_LZ4) != 0)
+
 #define	FILEOBJ_AETAG_LEN(h)	((h)->aetag_len)
 #define	FILEOBJ_DATA_LEN(h)	(be64toh((h)->data_len))
-#define	FILEOBJ_EDATA_LEN(h)	(FILEOBJ_DATA_LEN(h) + (h)->edata_pad)
+#define	FILEOBJ_CDATA_LEN(h)	(be64toh((h)->cdata_len))
 #define	FILEOBJ_GETMETA_LEN(t)	(FILEOBJ_HDR_LEN + STORAGE_ALIGN(t))
 
 #define	FILEOBJ_HDR_TO_AETAG(h)	STORAGE_PTROFF((h), FILEOBJ_HDR_LEN)
-
 #define	FILEOBJ_HDR_TO_DATA(h)	\
     STORAGE_PTROFF((h), FILEOBJ_GETMETA_LEN(FILEOBJ_AETAG_LEN(h)))
 
+#define	FILEOBJ_ETARGET_LEN(h)	\
+    (FILEOBJ_LZ4_P(h) ? FILEOBJ_CDATA_LEN(h) : FILEOBJ_DATA_LEN(h))
+#define	FILEOBJ_EDATA_LEN(h)	(FILEOBJ_ETARGET_LEN(h) + (h)->edata_pad)
+
 #define	FILEOBJ_FILE_LEN(h)	\
     (FILEOBJ_GETMETA_LEN(FILEOBJ_AETAG_LEN(h)) + FILEOBJ_EDATA_LEN(h))
-
-/*
- * "Safe-buffer" API.
- */
-
-typedef struct {
-	void *	buf;		// buffer address
-	size_t	buf_size;	// buffer (allocation) size
-} sbuffer_t;
-
-void *	sbuffer_alloc(sbuffer_t *, size_t);
-void *	sbuffer_move(sbuffer_t *, size_t);
-void	sbuffer_free(sbuffer_t *);
 
 /*
  * Storage API.

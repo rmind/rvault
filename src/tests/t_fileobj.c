@@ -118,12 +118,48 @@ test_file_onebyte(rvault_t *vault)
 }
 
 static void
+test_file_zero(rvault_t *vault)
+{
+	static const unsigned zeros[16];
+	unsigned buf[16];
+	fileobj_t *fobj;
+	ssize_t nbytes;
+
+	fobj = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fobj != NULL);
+
+	/* Test an empty file. */
+	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	assert(nbytes == 0);
+
+	/* Setting the file size must fill the space with zeros. */
+	fileobj_setsize(fobj, sizeof(buf));
+	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	assert(nbytes == sizeof(buf));
+	assert(memcmp(buf, zeros, sizeof(buf)) == 0);
+
+	/*
+	 * Shrink to zero, must result in zero bytes to read.
+	 * Re-open the file to test with a separate file descriptor.
+	 */
+	fileobj_setsize(fobj, 0);
+	fileobj_close(fobj);
+
+	fobj = fileobj_open(vault, "/empty", O_RDONLY, FOBJ_OMASK);
+	assert(fobj != NULL);
+	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	assert(nbytes == 0);
+	fileobj_close(fobj);
+}
+
+static void
 run_tests(const char *cipher)
 {
 	char *base_path = NULL;
 	rvault_t *vault = mock_get_vault(cipher, &base_path);
 	test_file_expand(vault);
 	test_file_onebyte(vault);
+	test_file_zero(vault);
 	mock_cleanup_vault(vault, base_path);
 }
 

@@ -22,6 +22,7 @@ test_basic(rvault_t *vault)
 	ssize_t nbytes, file_len, len;
 	sbuffer_t sbuf;
 
+	vault->compress = false;
 	nbytes = storage_write_data(vault, fd, TEST_TEXT, TEST_TEXT_LEN);
 	assert(nbytes > 0);
 
@@ -78,6 +79,38 @@ test_corrupted_aetag(rvault_t *vault)
 	close(fd);
 }
 
+#if defined(USE_LZ4)
+
+#define	TEST_CTEXT	"test test test test test ...................."
+#define	TEST_CTEXT_LEN	(sizeof(TEST_CTEXT) - 1)
+
+static void
+test_compression(rvault_t *vault)
+{
+	const int fd = mock_get_tmpfile(NULL);
+	ssize_t nbytes, file_len, len;
+	sbuffer_t sbuf;
+
+	vault->compress = true;
+	nbytes = storage_write_data(vault, fd, TEST_CTEXT, TEST_CTEXT_LEN);
+	assert(nbytes > 0);
+
+	file_len = fs_file_size(fd);
+	assert(file_len == nbytes);
+
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+	len = storage_read_data(vault, fd, file_len, &sbuf);
+	assert(len == TEST_CTEXT_LEN);
+
+	assert(strncmp(sbuf.buf, TEST_CTEXT, TEST_CTEXT_LEN) == 0);
+	sbuffer_free(&sbuf);
+
+	close(fd);
+}
+#else
+#define	test_compression(v)
+#endif
+
 static void
 run_tests(const char *cipher)
 {
@@ -86,6 +119,7 @@ run_tests(const char *cipher)
 	test_basic(vault);
 	test_corrupted_data(vault);
 	test_corrupted_aetag(vault);
+	test_compression(vault);
 	mock_cleanup_vault(vault, base_path);
 }
 
