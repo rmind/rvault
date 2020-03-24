@@ -72,6 +72,8 @@ sdb_open(rvault_t *vault)
 	char *fpath;
 	int fd;
 
+	memset(&sbuf, 0, sizeof(sbuffer_t));
+
 	/*
 	 * Open the SDB file, decrypt and load the data into a buffer.
 	 */
@@ -86,8 +88,6 @@ sdb_open(rvault_t *vault)
 	if ((flen = fs_file_size(fd)) == -1) {
 		goto out;
 	}
-
-	memset(&sbuf, 0, sizeof(sbuffer_t));
 	if (flen && (len = storage_read_data(vault, fd, flen, &sbuf)) == -1) {
 		goto out;
 	}
@@ -132,6 +132,9 @@ sdb_open(rvault_t *vault)
 	sdb->fd = fd;
 	return sdb;
 out:
+	if (sbuf.buf) {
+		sbuffer_free(&sbuf);
+	}
 	if (db) {
 		sqlite3_close(db);
 	}
