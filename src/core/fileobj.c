@@ -5,6 +5,13 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * File objects.
+ *
+ * Abstracts file handles/descriptors within a vault.  Provides an API
+ * for UNIX-style operations such as open/read/write/close.
+ */
+
 #include <sys/queue.h>
 #include <sys/stat.h>
 #include <stdio.h>

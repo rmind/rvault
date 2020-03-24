@@ -5,6 +5,13 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Recover file and its format.
+ *
+ * - Exporting and importing of the recovery file.
+ * - File format: implements 'sections' to separate and label the data.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>

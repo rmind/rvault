@@ -13,11 +13,11 @@ matrix:
     - os: linux
       arch: arm64
     # Travis transient failures
-    #- os: linux
-    #  arch: ppc64le
+    - os: linux
+      arch: ppc64le
     # Travis transient failures
-    #- os: osx
-    #  osx_image: xcode11.2
+    - os: osx
+      osx_image: xcode11.2
 
 addons:
   apt:

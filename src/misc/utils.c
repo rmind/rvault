@@ -5,6 +5,15 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Misc utilities and helpers.
+ *
+ * - Hex string encoding/decoding.
+ * - PID file setup and mutual exclusion using a lock.
+ * - Application logging facility.
+ * - Misc.
+ */
+
 #include <sys/file.h>
 #include <stdio.h>
 #include <stdlib.h>

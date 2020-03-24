@@ -5,6 +5,10 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * rvault FUSE operations.
+ */
+
 #include <sys/types.h>
 #include <sys/xattr.h>
 #include <stdio.h>
