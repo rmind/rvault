@@ -5,6 +5,12 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Vault authentication and envelope-encrypted key handling.
+ *
+ * See rvault_push_key() and rvault_pull_key() for the details.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +22,13 @@
 #include "rvault.h"
 #include "http_req.h"
 #include "utils.h"
+
+/*
+ * rvault server-side API.  Helpers for two POST methods:
+ *
+ *	/api/v1/register	-- to register a new user and its key
+ *	/api/v1/auth		-- to authenticate the user using TOTP
+ */
 
 static const char api_reg_json[] = "{\"uid\": \"%s\", \"key\": \"%s\" }";
 static const char api_auth_json[] = "{\"uid\": \"%s\", \"code\": \"%s\" }";
@@ -76,6 +89,14 @@ out:
 	return ret;
 }
 
+/*
+ * rvault_push_key: generate a random key, perform envelope-encryption,
+ * register the user with the server and retrieve the OTP key.
+ *
+ * => This step is performed once on vault creation.
+ * => On successful registration, prints the OTP key as a QR code.
+ * => New keys will be activated i.e. set for the crypto object.
+ */
 int
 rvault_push_key(rvault_t *vault)
 {
@@ -174,6 +195,12 @@ out:
 	return ret;
 }
 
+/*
+ * rvault_pull_key: get the TOTP code, authenticate the user and pull
+ * the envelope encrypted key from the server-side.
+ *
+ * => Will activate the effective keys taken from the "envelope".
+ */
 int
 rvault_pull_key(rvault_t *vault)
 {

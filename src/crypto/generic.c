@@ -5,6 +5,10 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Generic crypto facilities, e.g. randomness and safe memory erasing.
+ */
+
 #include <inttypes.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -43,9 +47,15 @@ crypto_getrandbytes(void *buf, size_t len)
 	nbytes = fs_read(fd, buf, len);
 	close(fd);
 #endif
+	if (nbytes > 0 && nbytes != (ssize_t)len) {
+		/*
+		 * This shall not happen, but let's not rule out some
+		 * systems miss-behaving.
+		 */
+		return -1;
+	}
 	return nbytes;
 }
-
 
 /*
  * crypto_memzero: explicit (secure) zeroing.

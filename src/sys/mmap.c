@@ -5,6 +5,11 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * "Safe" memory-map facility.  Uses system-specific flags to minimize
+ * the possibility of leaking the memory areas.
+ */
+
 #include <sys/mman.h>
 #include <inttypes.h>
 #include <stdbool.h>

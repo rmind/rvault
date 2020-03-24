@@ -5,6 +5,13 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Command line interface (CLI).
+ *
+ * - Application entry point, command dispatching and help messages.
+ * - FUSE mounting and SDB have their own handling.
+ */
+
 #include <sys/stat.h>
 #include <stdio.h>
 #include <stdlib.h>

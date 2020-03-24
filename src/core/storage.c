@@ -5,6 +5,20 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Storage
+ *
+ * Implements a mechanism for encrypting a memory buffer and writing
+ * it into a file with the relevant metadata and vice versa (that is,
+ * reading and decrypting the file and providing the data in a memory
+ * buffer).  The memory buffer is wrapped in a sbuffer_t -- a "secure"
+ * buffer interface (see below).
+ *
+ * The storage mechanism concerns: 1) providing sufficient low-level
+ * primitives for the file object (fileobj_t) interface)  2) the ABI
+ * of the file metadata  3) authenticated encryption at a file level.
+ */
+
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <stdio.h>

@@ -5,6 +5,13 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Abstracts HTTP requests using libcurl.
+ *
+ * - Supports basic GET and POST methods.
+ * - Enforces HTTPS (TLS) only.
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <inttypes.h>

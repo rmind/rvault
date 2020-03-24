@@ -12,8 +12,8 @@
  *
  * - OpenSSL uses PKCS#5 for AES in CBC.
  *
- * - Plain SHA-3 has HMAC properties, but OpenSSL also provides the
- *   primitive via its HMAC API.
+ * - Plain SHA-3 has HMAC properties; OpenSSL provides the primitive
+ *   via its HMAC API.
  */
 
 #include <inttypes.h>

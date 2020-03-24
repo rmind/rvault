@@ -5,6 +5,20 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * File name resolution.
+ *
+ * Resolve a plain path into the vault name space or vice versa by
+ * encrypting/decrypting the path components.
+ *
+ * In the vault namespace i.e. internal file/directory names (path
+ * components) are hex-encoded, for example:
+ *
+ *	RV:a94880:89cb5f5c5f4c63625236bf24f3daa3d6
+ *
+ * The prefix is followed by an AE tag and the encrypted file name.
+ */
+
 #include <stdlib.h>
 #include <inttypes.h>
 #include <string.h>

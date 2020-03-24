@@ -5,6 +5,14 @@
  * Use is subject to license terms, as specified in the LICENSE file.
  */
 
+/*
+ * Secrets database (SDB) to operate key-value pairs of secrets,
+ * such as passwords.
+ *
+ * - Secrets are stored in an encrypted Sqlite3 database.
+ * - CLI with auto-complete using editline (libedit).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
