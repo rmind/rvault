@@ -271,7 +271,7 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	nbytes = crypto_decrypt(vault->crypto, enc_buf, edata_len, buf, buflen);
 	if (nbytes == -1 || FILEOBJ_DATA_LEN(hdr) != (size_t)nbytes) {
 		app_log(LOG_ERR, "decryption failed");
-		sbuffer_free(sbuf);
+		sbuffer_free(&tmpsbuf);
 		nbytes = -1;
 		goto out;
 	}
