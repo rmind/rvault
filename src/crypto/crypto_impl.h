@@ -35,10 +35,10 @@ struct crypto {
 			enc_key_set : 1,
 			auth_key_set : 1;
 
-	/* Key, IV and block lengths. */
-	size_t		klen;
-	size_t		ilen;
-	size_t		blen;
+	/* Key and IV lengths; cipher block size. */
+	size_t		key_len;
+	size_t		iv_len;
+	size_t		block_size;
 
 	/* Key, IV and AE tag buffers. */
 	void *		key;
@@ -51,7 +51,7 @@ struct crypto {
 	 */
 	crypto_hmac_t	hmac_id;
 	void *		auth_key;
-	size_t		alen;
+	size_t		auth_key_len;
 
 	/*
 	 * The following is used for both AE solutions:
@@ -59,7 +59,7 @@ struct crypto {
 	 * - Additional authenticated data (AAD).
 	 */
 	void *		tag;
-	size_t		tlen;
+	size_t		tag_len;
 	const void *	aad;
 	size_t		aad_len;
 

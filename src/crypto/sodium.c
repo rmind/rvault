@@ -37,16 +37,16 @@ sodium_crypto_create(crypto_t *crypto)
 			errno = ENOTSUP;
 			return -1;
 		}
-		crypto->klen = crypto_aead_aes256gcm_KEYBYTES;
-		crypto->ilen = crypto_aead_aes256gcm_NPUBBYTES;
-		crypto->blen = 1; // GCM does not require padding
-		crypto->tlen = crypto_aead_aes256gcm_ABYTES;
+		crypto->key_len = crypto_aead_aes256gcm_KEYBYTES;
+		crypto->iv_len = crypto_aead_aes256gcm_NPUBBYTES;
+		crypto->block_size = 1; // GCM does not require padding
+		crypto->tag_len = crypto_aead_aes256gcm_ABYTES;
 		break;
 	case CHACHA20_POLY1305:
-		crypto->klen = crypto_aead_chacha20poly1305_IETF_KEYBYTES;
-		crypto->ilen = crypto_aead_chacha20poly1305_IETF_NPUBBYTES;
-		crypto->blen = 1; // stream cipher, no padding
-		crypto->tlen = crypto_aead_chacha20poly1305_IETF_ABYTES;
+		crypto->key_len = crypto_aead_chacha20poly1305_IETF_KEYBYTES;
+		crypto->iv_len = crypto_aead_chacha20poly1305_IETF_NPUBBYTES;
+		crypto->block_size = 1; // stream cipher, no padding
+		crypto->tag_len = crypto_aead_chacha20poly1305_IETF_ABYTES;
 		break;
 	default:
 		errno = ENOTSUP;
@@ -118,7 +118,7 @@ sodium_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 	switch (crypto->hmac_id) {
 	case HMAC_SHA256:
 		if (crypto_auth_hmacsha256_init(&sha256,
-		    crypto->auth_key, crypto->alen) == -1) {
+		    crypto->auth_key, crypto->auth_key_len) == -1) {
 			return -1;
 		}
 		if (aad && crypto_auth_hmacsha256_update(&sha256,
