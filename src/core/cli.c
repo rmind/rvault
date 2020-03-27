@@ -18,6 +18,7 @@
 #include <stdbool.h>
 #include <inttypes.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <fcntl.h>
@@ -188,8 +189,9 @@ open_vault(const char *datapath, const char *server)
 static int
 mount_vault(const char *datapath, const char *server, int argc, char **argv)
 {
-	static const char *opts_s = "dfr:s:h?";
+	static const char *opts_s = "c:dfr:s:h?";
 	static struct option opts_l[] = {
+		{ "compress",	optional_argument,	0,	'c'	},
 		{ "debug",	no_argument,		0,	'd'	},
 		{ "foreground",	no_argument,		0,	'f'	},
 		{ "recover",	required_argument,	0,	'r'	},
@@ -199,11 +201,16 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 	};
 	rvault_t *vault;
 	const char *mountpoint, *recover = NULL;
-	bool fg = false, debug = false, weak_sync = false;
+	bool fg = false, debug = false, weak_sync = false, comp = false;
 	int ch;
 
 	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
 		switch (ch) {
+		case 'c':
+			comp = optarg && (
+			    atoi(optarg) || tolower(optarg[0]) == 'y'
+			);
+			break;
 		case 'd':
 			debug = true;
 			break;
@@ -237,16 +244,19 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 		exit(EXIT_FAILURE);
 	}
 	vault->weak_sync = weak_sync;
+	vault->compress = comp;
 	rvaultfs_run(vault, mountpoint, fg, debug);
 	rvault_close(vault);
 	return 0;
 usage:
 	fprintf(stderr,
-	    "Usage:\t" APP_NAME " mount [ -d ] [ -f ] [ -r file ] PATH\n"
+	    "Usage:\t" APP_NAME " mount [ -c 1|0 ] [ -d ] [ -f ] "
+	    "[ -r file ] [ -s mode ] PATH\n"
 	    "\n"
 	    "Mount the vault at the given path.\n"
 	    "\n"
 	    "Options:\n"
+	    "  -c|--compress 1|0  Enable or disable (default) compression.\n"
 	    "  -d|--debug         Enable FUSE-level debug logging.\n"
 	    "  -f|--foreground    Run in the foreground (do not daemonize).\n"
 	    "  -r|--recover PATH  Mount the vault using the recovery file.\n"

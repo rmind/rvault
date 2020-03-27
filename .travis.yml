@@ -36,6 +36,7 @@ addons:
     - libcurl4
     # optional dependencies:
     - libedit-dev
+    - liblz4-dev
     - libsqlite3-dev
     - liblua5.3-dev
     - lua5.3
@@ -43,10 +44,11 @@ addons:
   homebrew:
     update: true
     packages:
+    - libscrypt
+    - lz4
     - openssl@1.1
     - libsodium
     - mbedtls
-    - libscrypt
     - lua
     casks:
     - osxfuse
@@ -55,9 +57,11 @@ script:
   # Build and install the DEB packages.
   - if [ "$(uname -s)" = "Linux" ]; then (cd pkg && make deb && sudo dpkg -i ../rvault*.deb); fi
   # Run the unit tests.
-  - (cd src && make clean && make -j4 && make tests)
+  - (cd src && make clean && USE_LZ4=1 make -j4 tests)
   # Run the Lua tests.
   - (cd src && make clean && make -j4 lib && make lua-tests)
+  #
   # Run the tests using mbedtls and libsodium
+  #
   #- (cd src && USE_MBEDTLS=1 make clean && USE_OPENSSL=0 USE_MBEDTLS=1 make tests)
   - if [ "$(uname -n)" = "x86_64" ]; then (cd src && USE_SODIUM=1 make clean && USE_OPENSSL=0 USE_SODIUM=1 make tests); fi

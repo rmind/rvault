@@ -124,6 +124,11 @@ else
 LDFLAGS+=	-lscrypt
 endif
 
+ifeq ($(USE_LZ4),1)
+CFLAGS+=	-DUSE_LZ4
+LDFLAGS+=	$(shell pkg-config --libs liblz4)
+endif
+
 ifeq ($(USE_OPENSSL),1)
 LDFLAGS+=	-lssl -lcrypto
 endif
@@ -151,6 +156,7 @@ OBJS+=		core/rvault.o
 OBJS+=		core/keyauth.o
 OBJS+=		core/resolve.o
 OBJS+=		core/cli.o
+OBJS+=		core/buffer.o
 OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
 OBJS+=		core/http_req.o
@@ -254,6 +260,6 @@ lua-tests:
 # Debugging
 #
 
-debug: all tests
+debug: all
 
 .PHONY: all debug tests clean

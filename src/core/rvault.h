@@ -22,6 +22,7 @@ typedef struct {
 	char *			base_path;
 	const char *		server_url;
 	bool			weak_sync;
+	bool			compress;
 
 	crypto_cipher_t		cipher;
 	crypto_hmac_t		hmac_id;
