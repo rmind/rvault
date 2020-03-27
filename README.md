@@ -118,6 +118,7 @@ Mandatory:
 Optional:
 - libedit
 - sqlite3 3.23 or newer with `SQLITE_ENABLE_DESERIALIZE` enabled
+- lz4
 
 ## Building
 
