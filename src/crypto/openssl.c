@@ -62,9 +62,9 @@ openssl_crypto_create(crypto_t *crypto)
 		return -1;
 	}
 	crypto->ctx = (void *)(uintptr_t)cipher;
-	crypto->klen = EVP_CIPHER_key_length(cipher);
-	crypto->ilen = EVP_CIPHER_iv_length(cipher);
-	crypto->blen = EVP_CIPHER_block_size(cipher);
+	crypto->key_len = EVP_CIPHER_key_length(cipher);
+	crypto->iv_len = EVP_CIPHER_iv_length(cipher);
+	crypto->block_size = EVP_CIPHER_block_size(cipher);
 
 	switch (crypto->cipher) {
 	case AES_256_GCM:
@@ -72,10 +72,10 @@ openssl_crypto_create(crypto_t *crypto)
 		/*
 		 * Both ciphers use 128-bit authentication tag.
 		 */
-		crypto->tlen = 16;
+		crypto->tag_len = 16;
 		break;
 	default:
-		crypto->tlen = 0;
+		crypto->tag_len = 0;
 	}
 	return 0;
 }
@@ -99,7 +99,8 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
 		return -1;
 	}
-	if (EVP_EncryptInit_ex(ctx, cipher, NULL, crypto->key, crypto->iv) != 1) {
+	if (EVP_EncryptInit_ex(ctx, cipher, NULL,
+	    crypto->key, crypto->iv) != 1) {
 		nbytes = -1;
 		goto err;
 	}
@@ -128,7 +129,7 @@ openssl_crypto_encrypt(const crypto_t *crypto,
 
 	/* If AE cipher: obtain the authentication tag. */
 	if (crypto->ae_cipher && EVP_CIPHER_CTX_ctrl(ctx,
-	    EVP_CTRL_AEAD_GET_TAG, crypto->tlen, crypto->tag) != 1) {
+	    EVP_CTRL_AEAD_GET_TAG, crypto->tag_len, crypto->tag) != 1) {
 		nbytes = -1;
 		goto err;
 	}
@@ -156,7 +157,8 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 	if ((ctx = EVP_CIPHER_CTX_new()) == NULL) {
 		return -1;
 	}
-	if (EVP_DecryptInit_ex(ctx, cipher, NULL, crypto->key, crypto->iv) != 1) {
+	if (EVP_DecryptInit_ex(ctx, cipher, NULL,
+	    crypto->key, crypto->iv) != 1) {
 		goto err;
 	}
 	bufp = outbuf;
@@ -178,7 +180,7 @@ openssl_crypto_decrypt(const crypto_t *crypto,
 
 	/* If AE cipher: verify the authentication tag. */
 	if (crypto->ae_cipher && EVP_CIPHER_CTX_ctrl(ctx,
-	    EVP_CTRL_AEAD_SET_TAG, crypto->tlen, crypto->tag) != 1) {
+	    EVP_CTRL_AEAD_SET_TAG, crypto->tag_len, crypto->tag) != 1) {
 		nbytes = -1;
 		goto err;
 	}
@@ -218,7 +220,8 @@ openssl_crypto_hmac(const crypto_t *crypto, const void *data, size_t data_len,
 	if ((ctx = HMAC_CTX_new()) == NULL) {
 		return -1;
 	}
-	if (HMAC_Init_ex(ctx, crypto->auth_key, crypto->alen, h, NULL) != 1) {
+	if (HMAC_Init_ex(ctx, crypto->auth_key,
+	    crypto->auth_key_len, h, NULL) != 1) {
 		goto out;
 	}
 	if (aad && HMAC_Update(ctx, aad, aad_len) != 1) {

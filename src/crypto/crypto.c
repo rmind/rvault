@@ -182,19 +182,19 @@ crypto_create(crypto_cipher_t c, crypto_hmac_t hmac_id)
 	if (crypto->ops->create(crypto) == -1) {
 		goto err;
 	}
-	ASSERT(crypto->klen >= CRYPTO_MIN_KEY_LEN);
-	crypto->alen = CRYPTO_MIN_KEY_LEN;
+	ASSERT(crypto->key_len >= CRYPTO_MIN_KEY_LEN);
+	crypto->auth_key_len = CRYPTO_MIN_KEY_LEN;
 
 	/*
 	 * Determine the AE mechanism.
 	 */
-	if (crypto->tlen == 0) {
-		ssize_t tlen;
+	if (crypto->tag_len == 0) {
+		ssize_t tag_len;
 
-		if ((tlen = crypto_hmac_len(hmac_id)) == -1) {
+		if ((tag_len = crypto_hmac_len(hmac_id)) == -1) {
 			goto err;
 		}
-		crypto->tlen = tlen;
+		crypto->tag_len = tag_len;
 		crypto->ae_cipher = false;
 	} else {
 		crypto->ae_cipher = true;
@@ -203,16 +203,16 @@ crypto_create(crypto_cipher_t c, crypto_hmac_t hmac_id)
 	/*
 	 * Allocate the buffers.
 	 */
-	if ((crypto->iv = malloc(crypto->ilen)) == NULL) {
+	if ((crypto->iv = malloc(crypto->iv_len)) == NULL) {
 		goto err;
 	}
-	if ((crypto->key = malloc(crypto->klen)) == NULL) {
+	if ((crypto->key = malloc(crypto->key_len)) == NULL) {
 		goto err;
 	}
-	if ((crypto->auth_key = malloc(crypto->alen)) == NULL) {
+	if ((crypto->auth_key = malloc(crypto->auth_key_len)) == NULL) {
 		goto err;
 	}
-	if ((crypto->tag = malloc(crypto->tlen)) == NULL) {
+	if ((crypto->tag = malloc(crypto->tag_len)) == NULL) {
 		goto err;
 	}
 
@@ -228,7 +228,7 @@ err:
 void *
 crypto_gen_iv(crypto_t *crypto, size_t *len)
 {
-	const size_t iv_len = crypto->ilen;
+	const size_t iv_len = crypto->iv_len;
 	void *iv;
 
 	ASSERT(iv_len > 0);
@@ -250,11 +250,11 @@ crypto_gen_iv(crypto_t *crypto, size_t *len)
 int
 crypto_set_iv(crypto_t *crypto, const void *iv, size_t len)
 {
-	if (crypto->ilen != len) {
+	if (crypto->iv_len != len) {
 		errno = EINVAL;
 		return -1;
 	}
-	memcpy(crypto->iv, iv, crypto->ilen);
+	memcpy(crypto->iv, iv, crypto->iv_len);
 	crypto->iv_set = true;
 	return 0;
 }
@@ -266,11 +266,11 @@ int
 crypto_set_passphrasekey(crypto_t *crypto, const char *passphrase,
     const void *kp, size_t kp_len)
 {
-	const size_t dlen = crypto->klen + crypto->alen;
+	const size_t dlen = crypto->key_len + crypto->auth_key_len;
 	void *dkey, *akey;
 
-	ASSERT(crypto->klen >= CRYPTO_MIN_KEY_LEN);
-	ASSERT(crypto->alen >= CRYPTO_MIN_KEY_LEN);
+	ASSERT(crypto->key_len >= CRYPTO_MIN_KEY_LEN);
+	ASSERT(crypto->auth_key_len >= CRYPTO_MIN_KEY_LEN);
 
 	/*
 	 * Derive encryption key and the authentication key.
@@ -286,9 +286,9 @@ crypto_set_passphrasekey(crypto_t *crypto, const char *passphrase,
 		return -1;
 	}
 
-	memcpy(crypto->key, dkey, crypto->klen);
-	akey = (uint8_t *)dkey + crypto->klen;
-	memcpy(crypto->auth_key, akey, crypto->alen);
+	memcpy(crypto->key, dkey, crypto->key_len);
+	akey = (uint8_t *)dkey + crypto->key_len;
+	memcpy(crypto->auth_key, akey, crypto->auth_key_len);
 
 	crypto_memzero(dkey, dlen);
 	free(dkey);
@@ -304,10 +304,10 @@ crypto_set_passphrasekey(crypto_t *crypto, const char *passphrase,
 int
 crypto_set_key(crypto_t *crypto, const void *key, size_t len)
 {
-	if (crypto->klen != len) {
+	if (crypto->key_len != len) {
 		return -1;
 	}
-	memcpy(crypto->key, key, crypto->klen);
+	memcpy(crypto->key, key, crypto->key_len);
 	crypto->enc_key_set = true;
 	return 0;
 }
@@ -316,15 +316,15 @@ const void *
 crypto_get_key(const crypto_t *crypto, size_t *key_len)
 {
 	ASSERT(crypto->enc_key_set);
-	*key_len = crypto->klen;
+	*key_len = crypto->key_len;
 	return crypto->key;
 }
 
 ssize_t
 crypto_get_keylen(const crypto_t *crypto)
 {
-	ASSERT(crypto->klen > 0);
-	return crypto->klen;
+	ASSERT(crypto->key_len > 0);
+	return crypto->key_len;
 }
 
 /*
@@ -333,10 +333,10 @@ crypto_get_keylen(const crypto_t *crypto)
 int
 crypto_set_authkey(crypto_t *crypto, const void *akey, size_t len)
 {
-	if (crypto->alen != len) {
+	if (crypto->auth_key_len != len) {
 		return -1;
 	}
-	memcpy(crypto->auth_key, akey, crypto->alen);
+	memcpy(crypto->auth_key, akey, crypto->auth_key_len);
 	crypto->auth_key_set = true;
 	return 0;
 }
@@ -345,15 +345,15 @@ const void *
 crypto_get_authkey(const crypto_t *crypto, size_t *akey_len)
 {
 	ASSERT(crypto->auth_key_set);
-	*akey_len = crypto->alen;
+	*akey_len = crypto->auth_key_len;
 	return crypto->auth_key;
 }
 
 ssize_t
 crypto_get_authkeylen(const crypto_t *crypto)
 {
-	ASSERT(crypto->alen > 0);
-	return crypto->alen;
+	ASSERT(crypto->auth_key_len > 0);
+	return crypto->auth_key_len;
 }
 
 bool
@@ -381,10 +381,10 @@ crypto_set_aad(crypto_t *crypto, const void *aad, size_t aad_len)
 int
 crypto_set_aetag(crypto_t *crypto, const void *tag, size_t len)
 {
-	if (crypto->tlen != len) {
+	if (crypto->tag_len != len) {
 		return -1;
 	}
-	memcpy(crypto->tag, tag, crypto->tlen);
+	memcpy(crypto->tag, tag, crypto->tag_len);
 	return 0;
 }
 
@@ -394,13 +394,13 @@ crypto_set_aetag(crypto_t *crypto, const void *tag, size_t len)
 size_t
 crypto_get_aetaglen(const crypto_t *crypto)
 {
-	return crypto->tlen;
+	return crypto->tag_len;
 }
 
 const void *
 crypto_get_aetag(crypto_t *crypto, size_t *tag_len)
 {
-	*tag_len = crypto->tlen;
+	*tag_len = crypto->tag_len;
 	return crypto->tag;
 }
 
@@ -414,7 +414,7 @@ crypto_get_buflen(const crypto_t *crypto, size_t length)
 	 *
 	 * Just add a block size, to keep it simple.
 	 */
-	return length + crypto->blen;
+	return length + crypto->block_size;
 }
 
 static bool
@@ -436,14 +436,14 @@ ssize_t
 crypto_encrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
     void *outbuf, size_t outlen)
 {
-	const ssize_t tlen = crypto->tlen;
+	const ssize_t tag_len = crypto->tag_len;
 	ssize_t ret = -1;
 
 	if (!crypto_setup_done_p(crypto)) {
 		errno = EINVAL;
 		goto out;
 	}
-	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
+	if (inlen > INT_MAX || roundup(inlen, crypto->block_size) > outlen) {
 		errno = EINVAL;
 		goto out;
 	}
@@ -452,10 +452,10 @@ crypto_encrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
 		goto out;
 	}
 
-	/* If non-AE cipher (but using AE), HMAC using the EtM scheme. */
+	/* If non-AE cipher, HMAC using the EtM scheme. */
 	if (!crypto->ae_cipher) {
 		if (crypto->ops->hmac(crypto, outbuf, ret,
-		    crypto->aad, crypto->aad_len, crypto->tag) != tlen) {
+		    crypto->aad, crypto->aad_len, crypto->tag) != tag_len) {
 			ret = -1;
 			goto out;
 		}
@@ -477,27 +477,27 @@ ssize_t
 crypto_decrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
     void *outbuf, size_t outlen)
 {
-	const ssize_t tlen = crypto->tlen;
+	const ssize_t tag_len = crypto->tag_len;
 	ssize_t ret = -1;
 
 	if (!crypto_setup_done_p(crypto)) {
 		errno = EINVAL;
 		goto out;
 	}
-	if (inlen > INT_MAX || roundup(inlen, crypto->blen) > outlen) {
+	if (inlen > INT_MAX || roundup(inlen, crypto->block_size) > outlen) {
 		errno = EINVAL;
 		goto out;
 	}
 
-	/* If non-AE cipher (but using AE), verify the HMAC. */
+	/* If non-AE cipher, verify the HMAC. */
 	if (!crypto->ae_cipher) {
 		unsigned char hmac_buf[HMAC_MAX_BUFLEN];
 
 		if (crypto->ops->hmac(crypto, inbuf, inlen,
-		    crypto->aad, crypto->aad_len, hmac_buf) != tlen) {
+		    crypto->aad, crypto->aad_len, hmac_buf) != tag_len) {
 			goto out;
 		}
-		if (memcmp(crypto->tag, hmac_buf, tlen) != 0) {
+		if (memcmp(crypto->tag, hmac_buf, tag_len) != 0) {
 			goto out;
 		}
 	}
@@ -549,11 +549,11 @@ crypto_destroy(crypto_t *crypto)
 		crypto->ops->destroy(crypto);
 	}
 	if (crypto->key) {
-		crypto_memzero(crypto->key, crypto->klen);
+		crypto_memzero(crypto->key, crypto->key_len);
 		free(crypto->key);
 	}
 	if (crypto->auth_key) {
-		crypto_memzero(crypto->auth_key, crypto->alen);
+		crypto_memzero(crypto->auth_key, crypto->auth_key_len);
 		free(crypto->auth_key);
 	}
 	if (crypto->tag) {

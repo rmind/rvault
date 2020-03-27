@@ -28,6 +28,7 @@ ISO/IEC 19772:2009 compliant.
 - Authentication with the server using
 [TOTP](https://en.wikipedia.org/wiki/Time-based_One-time_Password_algorithm)
 ([RFC 6238](https://tools.ietf.org/html/rfc6238)).
+- On-the-fly [LZ4 compression](https://en.wikipedia.org/wiki/LZ4_(compression_algorithm)).
 
 Lightweight code base, easy to audit, minimum dependencies, extensive tests,
 [ASan](https://en.wikipedia.org/wiki/AddressSanitizer) and
@@ -96,7 +97,7 @@ using other reliable means (e.g. physical identification).
 #### What if I would forget my passphrase?
 
 It would be practically impossible to decrypt the data.  However, if you made
-a back of the effective encryption key, then you can recover your data.
+a backup of the effective encryption key, then you can recover your data.
 
 ## Caveats
 

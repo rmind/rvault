@@ -53,17 +53,17 @@ mbedtls_crypto_create(crypto_t *crypto)
 	mbedtls_cipher_setup(ctx, mbedtls_cipher_info_from_type(cipher));
 	crypto->ctx = ctx;
 
-	crypto->klen = mbedtls_cipher_get_key_bitlen(ctx) / 8;
-	crypto->ilen = mbedtls_cipher_get_iv_size(ctx);
-	crypto->blen = mbedtls_cipher_get_block_size(ctx);
+	crypto->key_len = mbedtls_cipher_get_key_bitlen(ctx) / 8;
+	crypto->iv_len = mbedtls_cipher_get_iv_size(ctx);
+	crypto->block_size = mbedtls_cipher_get_block_size(ctx);
 
 	switch (crypto->cipher) {
 	case AES_256_GCM:
 	case CHACHA20_POLY1305:
-		crypto->tlen = 16;
+		crypto->tag_len = 16;
 		break;
 	default:
-		crypto->tlen = 0;
+		crypto->tag_len = 0;
 		break;
 	}
 	return 0;
@@ -88,7 +88,7 @@ mbedtls_crypto_encrypt(const crypto_t *crypto,
 	size_t nbytes;
 	int ret;
 
-	if (mbedtls_cipher_setkey(ctx, crypto->key, crypto->klen * 8,
+	if (mbedtls_cipher_setkey(ctx, crypto->key, crypto->key_len * 8,
 	    MBEDTLS_ENCRYPT) != 0) {
 		errno = EINVAL;
 		return -1;
@@ -96,14 +96,15 @@ mbedtls_crypto_encrypt(const crypto_t *crypto,
 
 	switch (crypto->cipher) {
 	case AES_256_CBC:
-		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->ilen,
+		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->iv_len,
 		    inbuf, inlen, outbuf, &nbytes);
 		break;
 	case AES_256_GCM:
 	case CHACHA20_POLY1305:
 		ret = mbedtls_cipher_auth_encrypt(ctx,
-		    crypto->iv, crypto->ilen, crypto->aad, crypto->aad_len,
-		    inbuf, inlen, outbuf, &nbytes, crypto->tag, crypto->tlen);
+		    crypto->iv, crypto->iv_len, crypto->aad, crypto->aad_len,
+		    inbuf, inlen, outbuf, &nbytes,
+		    crypto->tag, crypto->tag_len);
 		break;
 	default:
 		abort();
@@ -123,7 +124,7 @@ mbedtls_crypto_decrypt(const crypto_t *crypto,
 	size_t nbytes;
 	int ret;
 
-	if (mbedtls_cipher_setkey(ctx, crypto->key, crypto->klen * 8,
+	if (mbedtls_cipher_setkey(ctx, crypto->key, crypto->key_len * 8,
 	    MBEDTLS_DECRYPT) != 0) {
 		errno = EINVAL;
 		return -1;
@@ -131,14 +132,15 @@ mbedtls_crypto_decrypt(const crypto_t *crypto,
 
 	switch (crypto->cipher) {
 	case AES_256_CBC:
-		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->ilen,
+		ret = mbedtls_cipher_crypt(ctx, crypto->iv, crypto->iv_len,
 		    inbuf, inlen, outbuf, &nbytes);
 		break;
 	case AES_256_GCM:
 	case CHACHA20_POLY1305:
 		ret = mbedtls_cipher_auth_decrypt(ctx,
-		    crypto->iv, crypto->ilen, crypto->aad, crypto->aad_len,
-		    inbuf, inlen, outbuf, &nbytes, crypto->tag, crypto->tlen);
+		    crypto->iv, crypto->iv_len, crypto->aad, crypto->aad_len,
+		    inbuf, inlen, outbuf, &nbytes,
+		    crypto->tag, crypto->tag_len);
 		break;
 	default:
 		abort();
@@ -170,7 +172,8 @@ mbedtls_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 	mbedtls_md_init(&ctx);
 	if (mbedtls_md_setup(&ctx, md, 1) != 0)
 		goto out;
-	if (mbedtls_md_hmac_starts(&ctx, crypto->auth_key, crypto->alen) != 0)
+	if (mbedtls_md_hmac_starts(&ctx, crypto->auth_key,
+	    crypto->auth_key_len) != 0)
 		goto out;
 	if (aad && mbedtls_md_hmac_update(&ctx, aad, aad_len) != 0)
 		goto out;
