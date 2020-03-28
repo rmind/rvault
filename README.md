@@ -40,12 +40,12 @@ Download the latest packages from the [releases](https://github.com/rmind/rvault
 
 ## Usage
 
-Setup the vault and create the passphrase:
+Drop us an email to get an assigned UUID. Setup the vault and create the passphrase:
 ```shell
 export RVAULT_SERVER="https://rvault.noxt.eu"
 export RVAULT_PATH="/home/alice/vault"
 mkdir "$RVAULT_PATH"
-rvault create cba768f9-0efe-4b2c-879d-0925f52bdfd3
+rvault create $UUID
 ```
 
 Scan the QR code, e.g. using the
@@ -55,6 +55,11 @@ To mount the vault:
 ```shell
 mkdir /home/alice/documents
 rvault mount /home/alice/documents
+```
+Alternatively, you can create a vault without authentication (much less secure):
+```shell
+UUID=... # generate your own UUID
+rvault create -n $UUID
 ```
 
 Type `rvault -h` or see the **rvault(1)** manual page for more details.
