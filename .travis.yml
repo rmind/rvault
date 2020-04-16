@@ -17,7 +17,7 @@ matrix:
       arch: ppc64le
     # Travis transient failures
     - os: osx
-      osx_image: xcode11.2
+      osx_image: xcode11.3
 
 addons:
   apt:
@@ -42,7 +42,7 @@ addons:
     - lua5.3
 
   homebrew:
-    update: true
+    update: false
     packages:
     - libscrypt
     - lz4

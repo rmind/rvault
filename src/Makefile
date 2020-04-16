@@ -104,10 +104,10 @@ endif
 #
 
 ifeq ($(SYSNAME),Darwin)
-# FIXME/XXX
+# XXX
 CFLAGS+=	-I/usr/local/include
-CFLAGS+=	-I/usr/local/Cellar/openssl@1.1/1.1.1d/include
-LDFLAGS+=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
+CFLAGS+=	-I/usr/local/opt/openssl@1.1/include
+LDFLAGS+=	-L/usr/local/opt/openssl@1.1/lib
 endif
 
 ifeq ($(SYSNAME),NetBSD)
@@ -214,7 +214,7 @@ ifeq ($(MAKECMDGOALS),lib)
 CFLAGS+=	-fPIC
 CFLAGS+=	$(shell pkg-config --cflags lua5.3)
 # Override the LDFLAGS
-LDFLAGS=	-L/usr/local/Cellar/openssl@1.1/1.1.1d/lib
+LDFLAGS=	-L/usr/local/opt/openssl@1.1/lib
 LDFLAGS+=	$(shell pkg-config --cflags --libs lua5.3)
 LDFLAGS+=	-lssl -lcrypto -lscrypt
 endif
