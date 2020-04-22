@@ -8,6 +8,7 @@
 #ifndef	_CRYPTO_H_
 #define	_CRYPTO_H_
 
+#include <sys/types.h>
 #include <stdint.h>
 #include <stdbool.h>
 
