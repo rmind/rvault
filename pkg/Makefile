@@ -36,6 +36,13 @@ osx-pkg: prepare
 	    $(PROJ)-$(shell cat version.txt).pkg
 	@ echo && printf "\x1B[32mDEB packages:\033[0m\n" && ls -1 *.pkg
 
+win-pkg:
+	cp -R ../src/ ./SOURCES
+	cd ./SOURCES && \
+	    CFLAGS="-L/usr/local/dokan/lib" LDFLAGS="-ldokanfuse1" \
+	    make -j8 && make install DESTDIR="$(PWD)/BUILDROOT" \
+	    MANDIR="/usr/local/share/man" BINDIR="/usr/local/bin"
+
 clean:
 	rm -rf BUILD BUILDROOT RPMS SOURCES SRPMS version.txt *.pkg
 
