@@ -208,7 +208,8 @@ mount_vault(const char *datapath, const char *server, int argc, char **argv)
 		switch (ch) {
 		case 'c':
 			comp = optarg && (
-			    atoi(optarg) || tolower(optarg[0]) == 'y'
+			    atoi(optarg) ||
+			    tolower((unsigned char)optarg[0]) == 'y'
 			);
 			break;
 		case 'd':
