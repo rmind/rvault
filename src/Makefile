@@ -165,6 +165,7 @@ OBJS+=		core/http_req.o
 OBJS+=		core/recovery.o
 ifeq ($(USE_SQLITE),1)
 OBJS+=		core/sdb.o
+OBJS+=		core/sdb_sql.o
 endif
 OBJS+=		fuse/rvaultfs.o
 OBJS+=		sys/fs.o

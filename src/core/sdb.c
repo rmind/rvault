@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -15,232 +15,153 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <inttypes.h>
-#include <fcntl.h>
 #include <unistd.h>
-#include <err.h>
 
-#include <sqlite3.h>
 #include <editline/readline.h>
 
 #include "rvault.h"
-#include "storage.h"
+#include "sdb.h"
 #include "cli.h"
-#include "sys.h"
-
-#if SQLITE_VERSION_NUMBER < 3023000
-#error need sqlite 3.23 or newer
-#endif
-
-///////////////////////////////////////////////////////////////////////////////
-
-typedef struct {
-	int		fd;
-	sqlite3 *	db;
-} sdb_t;
+#include "utils.h"
 
 static sdb_t *sdb_readline_ctx = NULL; // XXX
 
-static int
-sdb_init(sqlite3 *db)
+///////////////////////////////////////////////////////////////////////////////
+
+static void
+sdb_sql_print(void *arg, const char *val)
 {
-	static const char *sdb_init_q =
-	    "CREATE TABLE IF NOT EXISTS sdb ("
-	    "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
-	    "  key VARCHAR UNIQUE,"
-	    "  val VARCHAR UNIQUE"
-	    ");"
-	    "CREATE INDEX IF NOT EXISTS sdb_key_idx ON sdb (key);";
-
-	app_log(LOG_DEBUG, "%s: initializing database", __func__);
-
-	if (sqlite3_exec(db, sdb_init_q, NULL, NULL, NULL) != SQLITE_OK) {
-		app_log(LOG_CRIT, "sqlite3_exec: %s", sqlite3_errmsg(db));
-		return -1;
-	}
-	return 0;
+	FILE *fp = arg;
+	fprintf(fp, "%s\n", val);
 }
 
-static sdb_t *
-sdb_open(rvault_t *vault)
+#define	SDB_NEED_SYNC		0x1	// change made; need to sync DB
+#define	SDB_ASK_SECRET		0x2	// ask to input the secret
+#define	SDB_CHECK_RESULT	0x4	// check that rows were updated
+#define	SDB_TIERS_GC		0x8	// clean up the tiers
+
+static const struct sdb_cmd {
+	const char *	cmd;
+	unsigned	params;
+	unsigned	flags;
+	const char *	query;
+	const char *	subquery;
+} sdb_cmds[] = {
+	{
+		"LS", 0, 0x0,
+		"SELECT key FROM secrets ORDER BY key",
+		NULL
+	},
+	{
+		"GET", 1, 0x0,
+		"SELECT val FROM secrets WHERE key = ?",
+		NULL
+	},
+	{
+		"SET", 1, SDB_NEED_SYNC | SDB_ASK_SECRET,
+		"INSERT OR REPLACE INTO secrets (key, val) VALUES (?, ?)",
+		NULL
+	},
+	{
+		"DEL", 1, SDB_NEED_SYNC,
+		"DELETE FROM secrets WHERE key = ?",
+		NULL,
+	},
+	{
+		"TIERS", 0, 0x0,
+		"SELECT name FROM tiers ORDER BY name",
+		"SELECT key FROM tier_map WHERE tier_id = "
+		    "(SELECT id FROM tiers WHERE name = ?)"
+		    "ORDER BY lower(key)",
+	},
+	{
+		"NEWTIER", 1, SDB_NEED_SYNC,
+		"INSERT OR IGNORE INTO tiers (name) VALUES (?)",
+		NULL
+	},
+	{
+		"LINK", 2, SDB_NEED_SYNC | SDB_CHECK_RESULT,
+		"INSERT OR REPLACE INTO tier_map (key, tier_id) "
+		    "SELECT ?, id from tiers where name = ?",
+		NULL
+	},
+	{
+		"UNLINK", 1, SDB_NEED_SYNC | SDB_CHECK_RESULT | SDB_TIERS_GC,
+		"DELETE FROM tier_map WHERE key = ?",
+		NULL
+	},
+};
+
+static void
+sdb_cmd_handle(void *arg, const char *val)
 {
-	sdb_t *sdb = NULL;
-	sqlite3 *db = NULL;
-	ssize_t len = 0, flen;
-	sbuffer_t sbuf;
-	char *fpath;
-	int fd;
+	const struct sdb_cmd *cmdcfg = arg;
 
-	memset(&sbuf, 0, sizeof(sbuffer_t));
-
-	/*
-	 * Open the SDB file, decrypt and load the data into a buffer.
-	 */
-	if (asprintf(&fpath, "%s/%s", vault->base_path, RVAULT_SDB_FILE) == -1) {
-		return NULL;
+	fprintf(stdout, "%*s%s\n", arg ? 0 : 2, "", val);
+	if (cmdcfg && cmdcfg->subquery) {
+		sdb_query(sdb_readline_ctx, sdb_cmd_handle, NULL,
+		    cmdcfg->subquery, 1, (const char *[]){ val });
 	}
-	fd = open(fpath, O_CREAT | O_RDWR, 0600);
-	free(fpath);
-	if (fd == -1) {
-		return NULL;
-	}
-	if ((flen = fs_file_size(fd)) == -1) {
-		goto out;
-	}
-	if (flen && (len = storage_read_data(vault, fd, flen, &sbuf)) == -1) {
-		goto out;
-	}
-
-	/*
-	 * Open an in-memory SQLite database and:
-	 * a) Import the stored database,
-	 * b) Initialize a fresh one.
-	 */
-	if (sqlite3_open(":memory:", &db) != SQLITE_OK) {
-		goto out;
-	}
-	if (sbuf.buf) {
-		void *db_buf;
-
-		app_log(LOG_DEBUG, "%s: loading the database", __func__);
-		if ((db_buf = sqlite3_malloc64(len)) == NULL) {
-			goto out;
-		}
-		memcpy(db_buf, sbuf.buf, len);
-		sbuffer_free(&sbuf);
-
-		/*
-		 * Note: if sqlite3_deserialize() fails, it will free the
-		 * database buffer, so no need to sqlite3_free().
-		 */
-		if (sqlite3_deserialize(db, "main", db_buf, len, len,
-		    SQLITE_DESERIALIZE_FREEONCLOSE |
-		    SQLITE_DESERIALIZE_RESIZEABLE) != SQLITE_OK) {
-			app_log(LOG_CRIT, "%s: database loading failed %s",
-			    __func__, sqlite3_errmsg(db));
-			goto out;
-		}
-	} else if (sdb_init(db) == -1) {
-		goto out;
-	}
-
-	if ((sdb = calloc(1, sizeof(sdb_t))) == NULL) {
-		goto out;
-	}
-	sdb->db = db;
-	sdb->fd = fd;
-	return sdb;
-out:
-	if (sbuf.buf) {
-		sbuffer_free(&sbuf);
-	}
-	if (db) {
-		sqlite3_close(db);
-	}
-	close(fd);
-	free(sdb);
-	return NULL;
-}
-
-static int
-sdb_sync(rvault_t *vault, sdb_t *sdb)
-{
-	sqlite3_int64 len;
-	unsigned char *buf;
-	int ret;
-
-	if ((buf = sqlite3_serialize(sdb->db, "main", &len, 0)) == NULL) {
-		return -1;
-	}
-	ret = storage_write_data(vault, sdb->fd, buf, len);
-	sqlite3_free(buf);
-	return ret;
 }
 
 static void
-sdb_close(sdb_t *sdb)
+sdb_exec_cmd(sdb_t *sdb, const struct sdb_cmd *cmdcfg,
+    unsigned n, const char **params)
 {
-	sqlite3_close(sdb->db);
-	close(sdb->fd);
-	free(sdb);
+	const unsigned flags = cmdcfg->flags;
+	int ret;
+
+	ret = sdb_query(sdb, sdb_cmd_handle, __UNCONST(cmdcfg),
+	    cmdcfg->query, n, params);
+
+	if ((flags & SDB_CHECK_RESULT) != 0 && ret == 0) {
+		const char *last_param = params[n - 1];
+		fprintf(stderr, "Error: '%s' not found\n", last_param);
+	}
+	if ((flags & SDB_TIERS_GC) != 0 && ret > 0) {
+		sdb_query(sdb, NULL, NULL,
+		    "DELETE FROM tiers WHERE id NOT IN "
+		    "(SELECT DISTINCT tier_id FROM tier_map);",
+		    0, NULL);
+	}
 }
 
-///////////////////////////////////////////////////////////////////////////////
-
 static int
-sdb_query(sdb_t *sdb, const char *query, const char *k, const char *v, FILE *fp)
+sdb_process_cmd(sdb_t *sdb, char *line)
 {
-	sqlite3_stmt *stmt = NULL;
-	int ret = -1;
-
-	if (sqlite3_prepare_v2(sdb->db, query, -1, &stmt, NULL) != SQLITE_OK)
-		goto out;
-	if (k && sqlite3_bind_text(stmt, 1, k, -1, SQLITE_STATIC) != SQLITE_OK)
-		goto out;
-	if (v && sqlite3_bind_text(stmt, 2, v, -1, SQLITE_STATIC) != SQLITE_OK)
-		goto out;
-
-	while (sqlite3_step(stmt) != SQLITE_DONE) {
-		const unsigned ncols = sqlite3_column_count(stmt);
-
-		for (unsigned i = 0; i < ncols; i++) {
-			if (sqlite3_column_type(stmt, i) != SQLITE_TEXT) {
-				continue;
-			}
-			fprintf(fp, "%s\n", sqlite3_column_text(stmt, i));
-		}
-	}
-	ret = 0;
-out:
-	if (ret) {
-		app_log(LOG_ERR, "%s: %s", __func__, sqlite3_errmsg(sdb->db));
-	}
-	if (stmt) {
-		sqlite3_finalize(stmt);
-	}
-	return ret;
-}
-
-///////////////////////////////////////////////////////////////////////////////
-
-static const struct {
-	const char *	cmd;
-	unsigned	params;
-	const char *	query;
-} sdb_cmds[] = {
-	{ "LS",  0, "SELECT key FROM sdb ORDER BY key" },
-	{ "GET", 1, "SELECT val FROM sdb WHERE key = ?" },
-	{ "SET", 2, "INSERT OR REPLACE INTO sdb (key, val) VALUES (?, ?)" },
-	{ "DEL", 1, "DELETE FROM sdb WHERE key = ?" },
-};
-
-static int
-sdb_exec_cmd(sdb_t *sdb, char *line)
-{
-	char *tokens[2] = { NULL, NULL };
+	char *tokens[] = { NULL, NULL, NULL };
 	unsigned n;
 
 	if ((n = str_tokenize(line, tokens, __arraycount(tokens))) < 1) {
 		return -1;
 	}
-	for (unsigned i = 0; i < __arraycount(sdb_cmds); i++) {
-		char *key, *secret;
-		int ret;
+	n--; // exclude the command token
 
-		if (strcasecmp(sdb_cmds[i].cmd, tokens[0]) != 0) {
+	for (unsigned i = 0; i < __arraycount(sdb_cmds); i++) {
+		const struct sdb_cmd *cmdcfg = &sdb_cmds[i];
+		unsigned paramcount = cmdcfg->params;
+		char *secret = NULL;
+
+		if (strcasecmp(cmdcfg->cmd, tokens[0]) != 0) {
 			continue;
 		}
-
-		key = (sdb_cmds[i].params >= 1) ? tokens[1] : NULL;
-		secret = (sdb_cmds[i].params >= 2) ? getpass("Secret:") : NULL;
-		ret = sdb_query(sdb, sdb_cmds[i].query, key, secret, stdout);
+		if (n < cmdcfg->params) {
+			continue;
+		}
+		if (cmdcfg->flags & SDB_ASK_SECRET) {
+			secret = getpass("Secret:");
+			tokens[2] = secret;
+			paramcount++;
+		}
+		sdb_exec_cmd(sdb, cmdcfg, paramcount, (const char *[]){
+		    tokens[1], tokens[2]
+		});
 
 		if (secret) {
 			crypto_memzero(secret, strlen(secret));
 			secret = NULL; // diagnostic
 		}
-		return ret;
+		return cmdcfg->flags;
 	}
 	return -1;
 }
@@ -274,7 +195,8 @@ keyname_generator(const char *text, const int state)
 	char keyname[1024];
 
 	if (!state) {
-		const char *query = "SELECT key FROM sdb WHERE key LIKE ?";
+		const char *query =
+		    "SELECT key FROM secrets WHERE key LIKE ? ORDER BY key";
 		char *like = NULL;
 
 		if ((fp = open_memstream(&buf, &len)) == NULL) {
@@ -284,7 +206,8 @@ keyname_generator(const char *text, const int state)
 			fclose(fp);
 			return NULL;
 		}
-		sdb_query(sdb_readline_ctx, query, like, NULL, fp);
+		sdb_query(sdb_readline_ctx, sdb_sql_print, fp,
+		    query, 1, (const char *[]){ like });
 		fclose(fp);
 		free(like);
 
@@ -318,12 +241,20 @@ sdb_usage(void)
 	    "Invalid command.\n"
 	    "\n"
 	    "Usage:\n"
-	    "  LS		list secrets\n"
-	    "  GET <name>	get the secret value\n"
-	    "  SET <name>	set the secret value\n"
-	    "  DEL <name>	delete the secret\n"
+	    "  LS                    list secrets\n"
+	    "  GET <name>            get the secret value\n"
+	    "  SET <name>            set the secret value\n"
+	    "  DEL <name>            delete the secret\n"
 	    "\n"
-	    "Note: names must not have white spaces.\n"
+	    "  TIERS                 list tiers\n"
+	    "  NEWTIER <name>        create a new tier\n"
+	    "  LINK <name> <tier>    associate a name with a tier\n"
+	    "  UNLINK <name>         remove a name associated with a tier\n"
+	    "\n"
+	    "Notes:\n"
+	    "- Names must not have white spaces.\n"
+	    "- Secrets and tier links have separate name spaces.\n"
+	    "- Tier gets deleted on the removal of last link.\n"
 	);
 }
 
@@ -333,6 +264,7 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 	rvault_t *vault;
 	sdb_t *sdb;
 	char *line;
+	int ret;
 
 	vault = open_vault(datapath, server);
 	ASSERT(vault != NULL);
@@ -345,10 +277,12 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 	rl_attempted_completion_function = cmd_completion;
 	sdb_readline_ctx = sdb;
 	while ((line = readline("> ")) != NULL) {
-		if (sdb_exec_cmd(sdb, line) == 0) {
-			sdb_sync(vault, sdb);
-		} else {
+		if ((ret = sdb_process_cmd(sdb, line)) == -1) {
 			sdb_usage();
+			continue;
+		}
+		if ((ret & SDB_NEED_SYNC) != 0 && sdb_sync(vault, sdb) == -1) {
+			app_elog(LOG_ERR, APP_NAME": sdb sync failed");
 		}
 		crypto_memzero(line, strlen(line));
 		free(line);
