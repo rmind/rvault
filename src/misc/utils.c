@@ -285,7 +285,7 @@ str_tokenize(char *line, char **tokens, unsigned n)
 	char *token;
 
 	while ((token = strsep(&line, sep)) != NULL && i < n) {
-		if (*sep == '\0' || strpbrk(token, sep) != NULL) {
+		if (*sep == '\0' || strchr(sep, *token) != NULL) {
 			continue;
 		}
 		tokens[i++] = token;
@@ -338,6 +338,7 @@ app_log_fwrite(int level, const char *msg)
 		localtime_r(&now, &tm);
 		strftime(time, sizeof(time), "%d/%b/%Y:%H:%M:%S %z", &tm);
 		fprintf(app_log_errfh, "[%s] %s\n", time, msg);
+		fflush(app_log_errfh);
 	}
 }
 

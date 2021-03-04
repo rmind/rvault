@@ -117,7 +117,7 @@ simplicity.
 Mandatory:
 - OpenSSL (>= 1.1) or
 [libsodium](https://download.libsodium.org/doc/) or
-[mbed TLS](https://en.wikipedia.org/wiki/Mbed_TLS)
+[mbed TLS](https://en.wikipedia.org/wiki/Mbed_TLS) (choose any)
 - FUSE (libfuse and/or system support)
 - libcurl
 
