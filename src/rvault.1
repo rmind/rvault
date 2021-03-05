@@ -173,11 +173,15 @@ might provide a solution for this with snapshot or backup functionality.
 .\" -----
 .Sh ENVIRONMENT VARIABLES
 The following environment variables are available:
-.Bl -tag -width Ev
+.Bl -tag -width xxxxxxxxxxxxxxxxxx
 .It Ev RVAULT_PATH
 Base path of the vault data.
 .It Ev RVAULT_SERVER
 Authentication server address.
+.It Ev RVAULT_CLI_TIMEOUT
+Inactivity timeout (in seconds since the last command entry) after which
+the CLI will automatically exit.
+Default: 600.
 .El
 .\" -----
 .Sh FILES
