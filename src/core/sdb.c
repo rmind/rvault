@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <signal.h>
 
 #include <editline/readline.h>
 
@@ -24,7 +25,8 @@
 #include "cli.h"
 #include "utils.h"
 
-static sdb_t *sdb_readline_ctx = NULL; // XXX
+static unsigned		sdb_inactivity_time = 10 * 60;
+static sdb_t *		sdb_readline_ctx = NULL; // XXX
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -258,12 +260,21 @@ sdb_usage(void)
 	);
 }
 
+
+static void
+sdb_cli_timeout(int sig __unused)
+{
+	const char msg[] = "\n"APP_NAME": user inactivity timeout; exiting.\n";
+	write(STDOUT_FILENO, msg, sizeof(msg));
+	kill(0, SIGINT);
+}
+
 int
 sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 {
 	rvault_t *vault;
 	sdb_t *sdb;
-	char *line;
+	char *v, *line;
 	int ret;
 
 	vault = open_vault(datapath, server);
@@ -274,9 +285,19 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 		rvault_close(vault);
 		return -1;
 	}
-	rl_attempted_completion_function = cmd_completion;
+
 	sdb_readline_ctx = sdb;
+	rl_attempted_completion_function = cmd_completion;
+	// rl_event_hook is not yet supported everywhere
+
+	signal(SIGALRM, sdb_cli_timeout);
+	if ((v = getenv("RVAULT_CLI_TIMEOUT")) != NULL) {
+		sdb_inactivity_time = (unsigned)atoi(v);
+	}
+	alarm(sdb_inactivity_time);
+
 	while ((line = readline("> ")) != NULL) {
+		alarm(sdb_inactivity_time);
 		if ((ret = sdb_process_cmd(sdb, line)) == -1) {
 			sdb_usage();
 			continue;
