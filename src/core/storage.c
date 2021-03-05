@@ -208,6 +208,7 @@ storage_map_obj(rvault_t *vault, int fd, size_t file_len)
 		return NULL;
 	}
 	if ((hdr = safe_mmap(file_len, fd, 0)) == NULL) {
+		app_elog(LOG_DEBUG, "%s: mmap() failed", __func__);
 		return NULL;
 	}
 	aetag_len = crypto_get_aetaglen(vault->crypto);
@@ -325,8 +326,10 @@ storage_read_data(rvault_t *vault, int fd, size_t file_len, sbuffer_t *sbuf)
 	if (FILEOBJ_EDATA_LEN(hdr) == 0) {
 		/*
 		 * Note: it is currently an error to have no encrypted data.
-		 * Empty file is represented as an empty file.
+		 * Empty file is represented as a fully empty file without
+		 * the header.
 		 */
+		app_elog(LOG_DEBUG, "%s: edata length is zero", __func__);
 		goto out;
 	}
 	memset(&tmpsbuf, 0, sizeof(sbuffer_t));

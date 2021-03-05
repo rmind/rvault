@@ -24,6 +24,23 @@
 #define	TEST_BLOCK_SIZE		(32U * 1024) // 32 KB
 
 static void
+test_file_basic(rvault_t *vault)
+{
+	fileobj_t *fobj;
+	ssize_t nbytes;
+
+	fobj = fileobj_open(vault, "/basic", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fobj != NULL);
+	fileobj_close(fobj);
+
+	fobj = fileobj_open(vault, "/basic", O_RDONLY, FOBJ_OMASK);
+	assert(fobj != NULL);
+	nbytes = fileobj_getsize(fobj);
+	assert(nbytes == 0);
+	fileobj_close(fobj);
+}
+
+static void
 test_file_expand(rvault_t *vault)
 {
 	fileobj_t *fobj;
@@ -118,7 +135,7 @@ test_file_onebyte(rvault_t *vault)
 }
 
 static void
-test_file_zero(rvault_t *vault)
+test_file_setsize(rvault_t *vault)
 {
 	static const unsigned zeros[16];
 	unsigned buf[16];
@@ -150,6 +167,23 @@ test_file_zero(rvault_t *vault)
 	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
 	assert(nbytes == 0);
 	fileobj_close(fobj);
+
+	/*
+	 * Write some data, shrink size, expand, check.
+	 */
+	fobj = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fobj != NULL);
+
+	nbytes = fileobj_pwrite(fobj, (const void *)"ab", 2, 0);
+	assert(nbytes == 2);
+
+	fileobj_setsize(fobj, 1);
+	fileobj_setsize(fobj, 3);
+
+	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	assert(nbytes == 3);
+	assert(memcmp(buf, "a\0\0", 3) == 0);
+	fileobj_close(fobj);
 }
 
 static void
@@ -157,9 +191,10 @@ run_tests(const char *cipher)
 {
 	char *base_path = NULL;
 	rvault_t *vault = mock_get_vault(cipher, &base_path);
+	test_file_basic(vault);
 	test_file_expand(vault);
 	test_file_onebyte(vault);
-	test_file_zero(vault);
+	test_file_setsize(vault);
 	mock_cleanup_vault(vault, base_path);
 }
 
