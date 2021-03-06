@@ -405,7 +405,10 @@ fileobj_getsize(fileobj_t *fobj)
 int
 fileobj_setsize(fileobj_t *fobj, size_t len)
 {
-	if (fileobj_dataload(fobj) == -1) {
+	/*
+	 * Only load the data if truncating to non-zero.
+	 */
+	if (len && fileobj_dataload(fobj) == -1) {
 		app_elog(LOG_DEBUG, "%s: fileobj_dataload() failed", __func__);
 		errno = EIO;
 		return -1;
@@ -415,7 +418,7 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	 * Note: if new length is zero, then sbuffer_move() will free the
 	 * old buffer and will return NULL.
 	 */
-	if (len && sbuffer_move(&fobj->sbuf, len, 0) == NULL) {
+	if (sbuffer_move(&fobj->sbuf, len, 0) == NULL && len) {
 		app_elog(LOG_DEBUG, "%s: sbuffer_move() failed", __func__);
 		return -1;
 	}

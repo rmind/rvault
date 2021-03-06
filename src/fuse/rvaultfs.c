@@ -100,7 +100,13 @@ rvaultfs_truncate(const char *path, off_t size)
 	if (size < 0) {
 		return -EINVAL;
 	}
-	if ((fobj = fileobj_open(vault, path, O_WRONLY, FOBJ_OMASK)) == NULL) {
+
+	/*
+	 * Note: use O_RDWR instead of O_WRONLY, since the data might have
+	 * to be loaded before truncation (e.g. in order decompress and
+	 * determine the correct offset).
+	 */
+	if ((fobj = fileobj_open(vault, path, O_RDWR, FOBJ_OMASK)) == NULL) {
 		return -errno;
 	}
 	if (fileobj_setsize(fobj, (size_t)size) == -1) {
