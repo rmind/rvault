@@ -148,12 +148,14 @@ rvaultfs_open_raw(const char *path, struct fuse_file_info *fi, mode_t mode)
 static int
 rvaultfs_create(const char *path, mode_t mode, struct fuse_file_info *fi)
 {
+	app_log(LOG_DEBUG, "%s: `%s' mode 0%o", __func__, path, mode);
 	return rvaultfs_open_raw(path, fi, mode);
 }
 
 static int
 rvaultfs_open(const char *path, struct fuse_file_info *fi)
 {
+	app_log(LOG_DEBUG, "%s: `%s'", __func__, path);
 	return rvaultfs_open_raw(path, fi, FOBJ_OMASK);
 }
 
@@ -323,6 +325,7 @@ rvaultfs_chmod(const char *path, mode_t mode)
 		return -errno;
 	}
 	ret = chmod(vpath, mode);
+	app_log(LOG_DEBUG, "%s: path `%s', retval %d", __func__, path, ret);
 	return (ret == -1) ? -errno : ret;
 }
 
@@ -336,6 +339,7 @@ rvaultfs_chown(const char *path, uid_t uid, gid_t gid)
 		return -errno;
 	}
 	ret = chown(vpath, uid, gid);
+	app_log(LOG_DEBUG, "%s: path `%s', retval %d", __func__, path, ret);
 	return (ret == -1) ? -errno : ret;
 }
 
@@ -348,7 +352,8 @@ rvaultfs_utimens(const char *path, const struct timespec ts[2])
 	if (get_vault_path(path, vpath, sizeof(vpath)) == -1) {
 		return -errno;
 	}
-	ret = utimensat(-1, path, ts, AT_SYMLINK_NOFOLLOW);
+	ret = utimensat(-1, vpath, ts, AT_SYMLINK_NOFOLLOW);
+	app_elog(LOG_DEBUG, "%s: path `%s', retval %d", __func__, path, ret);
 	return (ret == -1) ? -errno : ret;
 }
 

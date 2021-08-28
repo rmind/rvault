@@ -41,7 +41,10 @@ Download the latest packages from the [releases](https://github.com/rmind/rvault
 
 ## Usage
 
-Drop us an email to get an assigned UUID. Setup the vault and create the passphrase:
+You need to run [rvault svc](https://github.com/rmind/rvault-svc), the
+server-side service, yourself.
+
+Setup the vault and create the passphrase:
 ```shell
 export RVAULT_SERVER="https://rvault.noxt.eu"
 export RVAULT_PATH="/home/alice/vault"
