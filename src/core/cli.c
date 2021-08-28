@@ -271,31 +271,63 @@ usage:
 //////////////////////////////////////////////////////////////////////////////
 
 static int
-export_key(const char *datapath, const char *server,
-    int argc __unused, char **argv __unused)
+export_key(const char *datapath, const char *server, int argc, char **argv)
 {
+	static const char *opts_s = "sh?";
+	static struct option opts_l[] = {
+		{ "silent",	optional_argument,	0,	's'	},
+		{ "help",	no_argument,		0,	'h'	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	bool silent = false;
 	rvault_t *vault;
+	int ch;
 
-	printf("WARNING: This command is about to expose the "
-	    "effective encryption key!\n"
-	    "Back it up safely for recovery; "
-	    "leaking it would compromise the data.\n\n");
-
-	for (;;) {
-		int ch;
-
-		puts("Type 'y' to continue or 'n' to exit:");
-		ch = getchar();
-		if (ch == 'y')
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+		switch (ch) {
+		case 's':
+			silent = true;
 			break;
-		if (ch == 'n')
-			return 0;
+		case 'h':
+		case '?':
+		default:
+			goto usage;
+		}
+	}
+	argc -= optind;
+	argv += optind;
+
+	if (!silent) {
+		printf("WARNING: This command is about to expose the "
+		    "effective encryption key!\n"
+		    "Back it up safely for recovery; "
+		    "leaking it would compromise the data.\n\n");
+
+		for (;;) {
+			puts("Type 'y' to continue or 'n' to exit:");
+			ch = getchar();
+			if (ch == 'y')
+				break;
+			if (ch == 'n')
+				return 0;
+		}
 	}
 
 	vault = open_vault(datapath, server);
 	rvault_recovery_export(vault, stdout);
 	rvault_close(vault);
 	return 0;
+usage:
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " export-key [ -s ]\n"
+	    "\n"
+	    "Print the metadata and the effective encryption key."
+	    "\n"
+	    "Options:\n"
+	    "  -s|--silent        Silent mode with consent.\n"
+	    "\n"
+	);
+	return -1;
 }
 
 //////////////////////////////////////////////////////////////////////////////

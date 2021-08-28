@@ -214,20 +214,13 @@ err:
 int
 fileobj_stat(rvault_t *vault, const char *path, struct stat *st)
 {
-	int fd, ret = -1;
+	int ret = -1;
 	char *vpath;
 
 	if ((vpath = rvault_resolve_path(vault, path, NULL)) == NULL) {
 		return -1;
 	}
-	if ((fd = open(vpath, O_RDONLY)) == -1) {
-		app_log(LOG_DEBUG, "%s: open `%s' failed", __func__, vpath);
-		free(vpath);
-		return -1;
-	}
-	free(vpath);
-
-	if (fstat(fd, st) == -1) {
+	if (lstat(vpath, st) == -1) {
 		app_log(LOG_DEBUG, "%s: fstat `%s' failed", __func__, vpath);
 		goto err;
 	}
@@ -245,17 +238,33 @@ fileobj_stat(rvault_t *vault, const char *path, struct stat *st)
 	 */
 	if ((st->st_mode & S_IFMT) == S_IFREG && st->st_size > 0) {
 		ssize_t size;
+		int fd;
 
+		/*
+		 * It is necessary to open the file to read its real size
+		 * stored in the header.
+		 *
+		 * WARNING: Some applications create files with mode = 0.
+		 * Therefore we try to reduce the error rate by executing
+		 * this path only if st_size is non-zero.
+		 */
+		if ((fd = open(vpath, O_RDONLY)) == -1) {
+			app_log(LOG_DEBUG,
+			    "%s: open `%s' failed", __func__, vpath);
+			goto err;
+		}
 		if ((size = storage_read_length(vault, fd)) == -1) {
+			close(fd);
 			goto err;
 		}
 		st->st_size = size;
+		close(fd);
 	}
 	app_log(LOG_DEBUG, "%s: path `%s', size %zu",
 	    __func__, path, st->st_size);
 	ret = 0;
 err:
-	close(fd);
+	free(vpath);
 	return ret;
 }
 

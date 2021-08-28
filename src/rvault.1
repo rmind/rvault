@@ -89,7 +89,7 @@ WARNING: Such use case is very significantly less secure.
 Show help of this command.
 .El
 .\" ---
-.It Ic export-key
+.It Ic export-key Oo Fl s Oc
 Print the metadata and the effective encryption key.
 This command can be used to backup the key and relevant metadata
 for recovery purposes.
@@ -102,6 +102,11 @@ command with the
 .Fl r
 flag.
 The recovery data must be typed back exactly as it was printed.
+.Pp
+Alternatively, the
+.Fl s
+flag can be used for a silent mode (with consent) where the output can be
+redirected directly into a file which would be used as a recovery key.
 .\" ---
 .It Ic ls Oo Fl a Oc Oo Fl h Oc Op path
 List the vault contents.
@@ -211,6 +216,12 @@ export RVAULT_PATH=/home/user/vault
 
 rvault create $UID
 rvault mount /mnt/vault
+.Ed
+.Pp
+Another example on how to create and use the recovery key:
+.Bd -literal -offset indent
+rvault export-key -s > rvault-recovery.key
+rvault mount -r rvault-recovery.key /mnt/vault
 .Ed
 .\" -----
 .Sh SEE ALSO
