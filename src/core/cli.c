@@ -340,25 +340,25 @@ static int
 do_file_io(rvault_t *vault, const char *target, file_op_t io)
 {
 	const int flags = (io == FILE_READ) ? O_RDONLY : (O_CREAT | O_RDWR);
-	fileobj_t *fobj;
+	fileref_t *fref;
 	void *buf = NULL;
 	ssize_t nbytes;
 	off_t off = 0;
 	int ret = -1;
 
-	if ((fobj = fileobj_open(vault, target, flags, FOBJ_OMASK)) == NULL) {
+	if ((fref = fileobj_open(vault, target, flags, FOBJ_OMASK)) == NULL) {
 		err(EXIT_FAILURE, "failed to open `%s'", target);
 	}
 	switch (io) {
 	case FILE_READ:
-		if ((nbytes = fileobj_getsize(fobj)) <= 0) {
+		if ((nbytes = fileobj_getsize(fref)) <= 0) {
 			break; // nothing to do
 		}
 		if ((buf = malloc(nbytes)) == NULL) {
 			app_elog(LOG_CRIT, APP_NAME": malloc() failed");
 			goto out;
 		}
-		if (fileobj_pread(fobj, buf, nbytes, 0) == -1) {
+		if (fileobj_pread(fref, buf, nbytes, 0) == -1) {
 			app_elog(LOG_CRIT, APP_NAME": fileobj_pread() failed");
 			goto out;
 		}
@@ -373,7 +373,7 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 			goto out;
 		}
 		while ((nbytes = fs_read(STDIN_FILENO, buf, BUF_SIZE)) > 0) {
-			if (fileobj_pwrite(fobj, buf, nbytes, off) == -1) {
+			if (fileobj_pwrite(fref, buf, nbytes, off) == -1) {
 				app_elog(LOG_CRIT,
 				    APP_NAME": fileobj_pwrite() failed");
 				goto out;
@@ -388,7 +388,7 @@ do_file_io(rvault_t *vault, const char *target, file_op_t io)
 	}
 	ret = 0;
 out:
-	fileobj_close(fobj);
+	fileobj_close(fref);
 	free(buf);
 	return ret;
 }

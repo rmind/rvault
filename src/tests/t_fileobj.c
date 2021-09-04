@@ -26,30 +26,30 @@
 static void
 test_file_basic(rvault_t *vault)
 {
-	fileobj_t *fobj;
+	fileref_t *fref;
 	ssize_t nbytes;
 
-	fobj = fileobj_open(vault, "/basic", O_CREAT | O_RDWR, FOBJ_OMASK);
-	assert(fobj != NULL);
-	fileobj_close(fobj);
+	fref = fileobj_open(vault, "/basic", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref != NULL);
+	fileobj_close(fref);
 
-	fobj = fileobj_open(vault, "/basic", O_RDONLY, FOBJ_OMASK);
-	assert(fobj != NULL);
-	nbytes = fileobj_getsize(fobj);
+	fref = fileobj_open(vault, "/basic", O_RDONLY, FOBJ_OMASK);
+	assert(fref != NULL);
+	nbytes = fileobj_getsize(fref);
 	assert(nbytes == 0);
-	fileobj_close(fobj);
+	fileobj_close(fref);
 }
 
 static void
 test_file_expand(rvault_t *vault)
 {
-	fileobj_t *fobj;
+	fileref_t *fref;
 	ssize_t nbytes;
 	void *buf, *rbuf;
 	off_t off;
 
-	fobj = fileobj_open(vault, "/expand_test", O_CREAT | O_RDWR, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/expand_test", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref != NULL);
 
 	buf = malloc(TEST_BLOCK_SIZE);
 	assert(buf != NULL);
@@ -60,25 +60,25 @@ test_file_expand(rvault_t *vault)
 	 */
 	for (unsigned i = 0; i < TEST_BLOCK_COUNT; i++) {
 		memset(buf, (unsigned char)i, TEST_BLOCK_SIZE);
-		nbytes = fileobj_pwrite(fobj, buf, TEST_BLOCK_SIZE, off);
+		nbytes = fileobj_pwrite(fref, buf, TEST_BLOCK_SIZE, off);
 		assert(nbytes == TEST_BLOCK_SIZE);
 		off += nbytes;
 	}
-	nbytes = fileobj_getsize(fobj);
+	nbytes = fileobj_getsize(fref);
 	assert(nbytes == (TEST_BLOCK_SIZE * TEST_BLOCK_COUNT));
 
 	/*
 	 * NOTE: fileobj_close() should invoke SYNC.
 	 */
-	fileobj_close(fobj);
+	fileobj_close(fref);
 
 	/*
 	 * Open a new file handle and verify the written data.
 	 */
-	fobj = fileobj_open(vault, "/expand_test", O_RDONLY, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/expand_test", O_RDONLY, FOBJ_OMASK);
+	assert(fref != NULL);
 
-	nbytes = fileobj_getsize(fobj);
+	nbytes = fileobj_getsize(fref);
 	assert(nbytes == (TEST_BLOCK_SIZE * TEST_BLOCK_COUNT));
 
 	rbuf = malloc(TEST_BLOCK_SIZE);
@@ -86,7 +86,7 @@ test_file_expand(rvault_t *vault)
 	off = 0;
 
 	for (unsigned i = 0; i < TEST_BLOCK_COUNT; i++) {
-		nbytes = fileobj_pread(fobj, rbuf, TEST_BLOCK_SIZE, off);
+		nbytes = fileobj_pread(fref, rbuf, TEST_BLOCK_SIZE, off);
 		assert(nbytes == TEST_BLOCK_SIZE);
 		off += nbytes;
 
@@ -96,7 +96,7 @@ test_file_expand(rvault_t *vault)
 			abort();
 		}
 	}
-	fileobj_close(fobj);
+	fileobj_close(fref);
 
 	free(rbuf);
 	free(buf);
@@ -106,32 +106,32 @@ static void
 test_file_onebyte(rvault_t *vault)
 {
 	unsigned char b = '$', buf[16];
-	fileobj_t *fobj;
+	fileref_t *fref;
 	ssize_t nbytes;
 
-	fobj = fileobj_open(vault, "/1b_test", O_CREAT | O_RDWR, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/1b_test", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref != NULL);
 
-	nbytes = fileobj_pwrite(fobj, &b, 1, 0);
+	nbytes = fileobj_pwrite(fref, &b, 1, 0);
 	assert(nbytes == 1);
 
-	nbytes = fileobj_getsize(fobj);
+	nbytes = fileobj_getsize(fref);
 	assert(nbytes == 1);
 
-	fileobj_close(fobj);
+	fileobj_close(fref);
 
-	fobj = fileobj_open(vault, "/1b_test", O_RDONLY, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/1b_test", O_RDONLY, FOBJ_OMASK);
+	assert(fref != NULL);
 
-	nbytes = fileobj_getsize(fobj);
+	nbytes = fileobj_getsize(fref);
 	assert(nbytes == 1);
 
 	buf[0] = '\0';
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == 1);
 	assert(buf[0] == '$');
 
-	fileobj_close(fobj);
+	fileobj_close(fref);
 }
 
 static void
@@ -139,19 +139,19 @@ test_file_setsize(rvault_t *vault)
 {
 	static const unsigned zeros[16];
 	unsigned buf[16];
-	fileobj_t *fobj;
+	fileref_t *fref;
 	ssize_t nbytes;
 
-	fobj = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref != NULL);
 
 	/* Test an empty file. */
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == 0);
 
 	/* Setting the file size must fill the space with zeros. */
-	fileobj_setsize(fobj, sizeof(buf));
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	fileobj_setsize(fref, sizeof(buf));
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == sizeof(buf));
 	assert(memcmp(buf, zeros, sizeof(buf)) == 0);
 
@@ -159,31 +159,92 @@ test_file_setsize(rvault_t *vault)
 	 * Shrink to zero, must result in zero bytes to read.
 	 * Re-open the file to test with a separate file descriptor.
 	 */
-	fileobj_setsize(fobj, 0);
-	fileobj_close(fobj);
+	fileobj_setsize(fref, 0);
+	fileobj_close(fref);
 
-	fobj = fileobj_open(vault, "/empty", O_RDONLY, FOBJ_OMASK);
-	assert(fobj != NULL);
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	fref = fileobj_open(vault, "/empty", O_RDONLY, FOBJ_OMASK);
+	assert(fref != NULL);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == 0);
-	fileobj_close(fobj);
+	fileobj_close(fref);
 
 	/*
 	 * Write some data, shrink size, expand, check.
 	 */
-	fobj = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/empty", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref != NULL);
 
-	nbytes = fileobj_pwrite(fobj, (const void *)"ab", 2, 0);
+	nbytes = fileobj_pwrite(fref, (const void *)"ab", 2, 0);
 	assert(nbytes == 2);
 
-	fileobj_setsize(fobj, 1);
-	fileobj_setsize(fobj, 3);
+	fileobj_setsize(fref, 1);
+	fileobj_setsize(fref, 3);
 
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == 3);
 	assert(memcmp(buf, "a\0\0", 3) == 0);
-	fileobj_close(fobj);
+	fileobj_close(fref);
+}
+
+static void
+test_file_refs(rvault_t *vault)
+{
+	fileref_t *fref1, *fref2;
+	unsigned char b1 = 'x', b2 = 'y', buf[3];
+	unsigned fcount;
+	ssize_t nbytes;
+	int ret;
+
+	/*
+	 * Open two references (descriptors).
+	 */
+	fref1 = fileobj_open(vault, "/some", O_CREAT | O_RDWR, FOBJ_OMASK);
+	assert(fref1 != NULL);
+
+	fref2 = fileobj_open(vault, "/some", O_RDWR, FOBJ_OMASK);
+	assert(fref2 != NULL);
+
+
+	/*
+	 * Writes via separate references; sync each.
+	 */
+	assert(fref1 != fref2);
+
+	nbytes = fileobj_pwrite(fref1, &b1, 1, 0);
+	assert(nbytes == 1);
+
+	nbytes = fileobj_pwrite(fref2, &b2, 1, 1);
+	assert(nbytes == 1);
+
+	ret = fileobj_sync(fref1, FOBJ_FULLSYNC);
+	assert(ret == 0);
+
+	ret = fileobj_sync(fref2, FOBJ_FULLSYNC);
+	assert(ret == 0);
+
+	/*
+	 * Both reads should have the same visibility.
+	 */
+	nbytes = fileobj_pread(fref1, buf, sizeof(buf), 0);
+	assert(nbytes == 2);
+	assert(memcmp(buf, "xy", 2) == 0);
+
+	nbytes = fileobj_pread(fref2, buf, sizeof(buf), 0);
+	assert(nbytes == 2);
+	assert(memcmp(buf, "xy", 2) == 0);
+
+	/*
+	 * Close the references.
+	 *
+	 * Two references to one file object -- double check that.
+	 */
+	fcount = vault->file_count;
+
+	fileobj_close(fref1);
+	assert(vault->file_count == fcount);
+
+	fileobj_close(fref2);
+	assert(vault->file_count == --fcount);
 }
 
 static void
@@ -195,6 +256,7 @@ run_tests(const char *cipher)
 	test_file_expand(vault);
 	test_file_onebyte(vault);
 	test_file_setsize(vault);
+	test_file_refs(vault);
 	mock_cleanup_vault(vault, base_path);
 }
 

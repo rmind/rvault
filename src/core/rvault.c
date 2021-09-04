@@ -435,6 +435,11 @@ rvault_open_hdr(rvault_hdr_t *hdr, const char *server, const size_t file_len)
 	vault->cipher = hdr->cipher0;
 	vault->hmac_id = hdr->hmac_id;
 	vault->server_url = server;
+
+	vault->file_map = rhashmap_create(0, RHM_NOCOPY);
+	if (!vault->file_map) {
+		goto err;
+	}
 	LIST_INIT(&vault->file_list);
 
 	static_assert(sizeof(vault->uid) == sizeof(hdr->uid), "UUID length");
@@ -605,10 +610,15 @@ rvault_close_files(rvault_t *vault)
 	fileobj_t *fobj;
 
 	while ((fobj = LIST_FIRST(&vault->file_list)) != NULL) {
-		/* Closing removes the file-object from the list. */
-		fileobj_close(fobj);
+		/*
+		 * Closing removes the file object from the list.
+		 * Full close also destroys any file references.
+		 */
+		fileobj_close_full(fobj);
 	}
+
 	ASSERT(vault->file_count == 0);
+	rhashmap_destroy(vault->file_map);
 }
 
 /*

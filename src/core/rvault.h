@@ -11,6 +11,8 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <sys/queue.h>
+#include <rhashmap.h>
+
 #include "crypto.h"
 
 #define	APP_NAME		"rvault"
@@ -31,6 +33,7 @@ typedef struct {
 
 	LIST_HEAD(, fileobj)	file_list;
 	unsigned		file_count;
+	rhashmap_t *		file_map;
 } rvault_t;
 
 void *		open_metadata_mmap(const char *, char **, size_t *);

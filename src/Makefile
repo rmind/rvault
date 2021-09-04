@@ -189,6 +189,23 @@ endif
 # libs
 #
 
+HAVE_LIBS:=	$(shell test -d libs/rhashmap/src && echo 1 || echo 0)
+ifeq ($(HAVE_LIBS),0)
+define ERRMSG
+ERROR: src/libs/* source code is missing.
+Hint: probably did not initialize the Git submodules; consider running:
+
+git submodule update --init --recursive
+
+
+endef
+$(error $(ERRMSG))
+endif
+
+OBJS+=		libs/rhashmap/src/rhashmap.o
+OBJS+=		libs/rhashmap/src/murmurhash.o libs/rhashmap/src/siphash.o
+CFLAGS+=	-I libs/rhashmap/src/
+
 #
 # object files for the tests
 #

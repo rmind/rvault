@@ -116,7 +116,7 @@ test_rvault_verify(const char *base_path)
 	const char exp_content[] = "some-content";
 	const ssize_t exp_content_len = sizeof(exp_content) - 1;
 	rvault_t *vault;
-	fileobj_t *fobj;
+	fileref_t *fref;
 	ssize_t nbytes;
 	char buf[512];
 
@@ -129,13 +129,13 @@ test_rvault_verify(const char *base_path)
 	/*
 	 * Attempt to read the file in the directory.
 	 */
-	fobj = fileobj_open(vault, "/dir/test-file-0001", O_RDONLY, FOBJ_OMASK);
-	assert(fobj != NULL);
+	fref = fileobj_open(vault, "/dir/test-file-0001", O_RDONLY, FOBJ_OMASK);
+	assert(fref != NULL);
 
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == exp_content_len);
 	assert(strncmp(buf, exp_content, exp_content_len) == 0);
-	fileobj_close(fobj);
+	fileobj_close(fref);
 
 	rvault_close(vault);
 }
