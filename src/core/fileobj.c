@@ -33,6 +33,14 @@
 #include "utils.h"
 
 /*
+ * File reference (think of descriptor/handle).
+ */
+struct fileref {
+	fileobj_t *	fobj;
+	LIST_ENTRY(fileref) entry;
+};
+
+/*
  * In-memory file object (think of a vnode).
  */
 struct fileobj {
@@ -51,6 +59,10 @@ struct fileobj {
 	/* Last sync time. */
 	time_t		last_stime;
 
+	/* File reference list. */
+	unsigned	refcnt;
+	LIST_HEAD(, fileref) reflist;
+
 	/* Vault file-list entry. */
 	LIST_ENTRY(fileobj) entry;
 };
@@ -63,21 +75,21 @@ struct fileobj {
 #define	FOBJ_MIN_SYNC_TIME	3	// in seconds
 
 static int	fileobj_dataload(fileobj_t *);
+static int	fileobj_syncnode(fileobj_t *, int);
+static void	fileobj_free(fileobj_t *);
 
-fileobj_t *
-fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
+static fileobj_t *
+fileobj_alloc(rvault_t *vault, char *vpath, const size_t pathlen,
+    const int flags, const mode_t mode)
 {
 	fileobj_t *fobj;
 
 	if ((fobj = calloc(1, sizeof(fileobj_t))) == NULL) {
 		return NULL;
 	}
-	fobj->vpath = rvault_resolve_path(vault, path, &fobj->pathlen);
-	if (!fobj->vpath) {
-		free(fobj);
-		return NULL;
-	}
 	fobj->vault = vault;
+	fobj->vpath = vpath;
+	fobj->pathlen = pathlen;
 	LIST_INSERT_HEAD(&vault->file_list, fobj, entry);
 	vault->file_count++;
 
@@ -90,12 +102,59 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 	 */
 	fobj->fd = open(fobj->vpath, flags, mode);
 	if (fobj->fd == -1) {
-		fileobj_close(fobj);
+		fileobj_free(fobj);
 		return NULL;
 	}
 	app_log(LOG_DEBUG, "%s: vnode %p, data length %zu, vpath [%s]",
 	    __func__, fobj, fobj->len, fobj->vpath);
 	return fobj;
+}
+
+fileref_t *
+fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
+{
+	fileobj_t *fobj;
+	fileref_t *fref;
+	size_t pathlen;
+	char *vpath;
+
+	/* Get the file reference structure ready. */
+	if ((fref = calloc(1, sizeof(fileref_t))) == NULL) {
+		return NULL;
+	}
+
+	/*
+	 * Resolve the path and lookup the file object.
+	 */
+	if ((vpath = rvault_resolve_path(vault, path, &pathlen)) == NULL) {
+		free(fref);
+		return NULL;
+	}
+	if ((fobj = rhashmap_get(vault->file_map, vpath, pathlen)) != NULL) {
+		/* Already in the map -- just get the file referenve. */
+		free(vpath);
+		goto retfd;
+	}
+
+	/*
+	 * Open the file, loading the file object.  Enter the path into
+	 * the map, associating it with this file object.
+	 */
+	fobj = fileobj_alloc(vault, vpath, pathlen, flags, mode);
+	if (fobj == NULL) {
+		free(vpath);
+		free(fref);
+		return NULL;
+	}
+	rhashmap_put(vault->file_map, vpath, pathlen, fobj);
+retfd:
+	/*
+	 * Initialize and add the file reference.
+	 */
+	fref->fobj = fobj;
+	LIST_INSERT_HEAD(&fobj->reflist, fref, entry);
+	fobj->refcnt++;
+	return fref;
 }
 
 static int
@@ -131,10 +190,10 @@ fileobj_dataload(fileobj_t *fobj)
 }
 
 /*
- * fileobj_sync: sync the data to the backing store.
+ * fileobj_syncnode: sync the data to the backing store.
  */
-int
-fileobj_sync(fileobj_t *fobj, int stype)
+static int
+fileobj_syncnode(fileobj_t *fobj, int stype)
 {
 	rvault_t *vault = fobj->vault;
 	char *fpath;
@@ -212,6 +271,13 @@ err:
 }
 
 int
+fileobj_sync(fileref_t *fref, int stype)
+{
+	fileobj_t *fobj = fref->fobj;
+	return fileobj_syncnode(fobj, stype);
+}
+
+int
 fileobj_stat(rvault_t *vault, const char *path, struct stat *st)
 {
 	int ret = -1;
@@ -268,18 +334,28 @@ err:
 	return ret;
 }
 
-void
-fileobj_close(fileobj_t *fobj)
+static void
+fileobj_free(fileobj_t *fobj)
 {
 	rvault_t *vault = fobj->vault;
 	unsigned retry = 3;
+	void *ret __unused;
 
 	app_log(LOG_DEBUG, "%s: vnode %p", __func__, fobj);
 
 	/* Sync any data before closing. */
-	while (fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 && retry--) {
-		usleep(1); // best effort
+	while (fileobj_syncnode(fobj, FOBJ_FULLSYNC) == -1 && retry--) {
+		usleep(1);  // best effort
 	}
+
+	/*
+	 * Remove from the map.
+	 */
+	ASSERT(fobj->refcnt == 0);
+	ASSERT(LIST_EMPTY(&fobj->reflist));
+
+	ret = rhashmap_del(vault->file_map, fobj->vpath, fobj->pathlen);
+	ASSERT(fobj == ret);
 
 	/* Remove itself from the file list. */
 	LIST_REMOVE(fobj, entry);
@@ -302,9 +378,45 @@ fileobj_close(fileobj_t *fobj)
 	free(fobj);
 }
 
-ssize_t
-fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
+void
+fileobj_close(fileref_t *fref)
 {
+	fileobj_t *fobj = fref->fobj;
+
+	/*
+	 * Remove, destroy the file reference and drop the counter.
+	 */
+	ASSERT(fobj->refcnt > 0);
+	LIST_REMOVE(fref, entry);
+	free(fref);
+
+	/*
+	 * Destroy the file object on last reference.
+	 */
+	if (--fobj->refcnt == 0) {
+		fileobj_free(fobj);
+	}
+}
+
+void
+fileobj_close_full(fileobj_t *fobj)
+{
+	fileref_t *fref;
+
+	while ((fref = LIST_FIRST(&fobj->reflist)) != NULL) {
+		ASSERT(fobj->refcnt > 0);
+		LIST_REMOVE(fref, entry);
+		fobj->refcnt--;
+		free(fref);
+	}
+	ASSERT(fobj->refcnt == 0);
+	fileobj_free(fobj);
+}
+
+ssize_t
+fileobj_pread(fileref_t *fref, void *buf, size_t len, off_t offset)
+{
+	fileobj_t *fobj = fref->fobj;
 	size_t nbytes;
 	uint8_t *fbuf;
 
@@ -330,8 +442,9 @@ fileobj_pread(fileobj_t *fobj, void *buf, size_t len, off_t offset)
 }
 
 ssize_t
-fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
+fileobj_pwrite(fileref_t *fref, const void *buf, size_t len, off_t offset)
 {
+	fileobj_t *fobj = fref->fobj;
 	uint64_t endoff;
 	uint8_t *fbuf;
 
@@ -378,8 +491,8 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 	memcpy(&fbuf[offset], buf, len);
 	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 
-	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%zu]",
-	    __func__, fobj, (intmax_t)offset, len);
+	app_log(LOG_DEBUG, "%s: vnode %p, write [%jd:%ju]",
+	    __func__, fobj, (intmax_t)offset, (uintmax_t)offset + len);
 
 	if ((fobj->flags & FOBJ_ALWAYS_FSYNC) == 0) {
 		/*
@@ -388,21 +501,24 @@ fileobj_pwrite(fileobj_t *fobj, const void *buf, size_t len, off_t offset)
 		const time_t now = time(NULL);
 
 		if ((now - fobj->last_stime) > FOBJ_MIN_SYNC_TIME) {
-			if (fileobj_sync(fobj, FOBJ_WRITEBACK) == 0) {
+			if (fileobj_syncnode(fobj, FOBJ_WRITEBACK) == 0) {
 				fobj->last_stime = now;
 			}
 		}
 	} else {
-		fileobj_sync(fobj, FOBJ_FULLSYNC);
+		fileobj_syncnode(fobj, FOBJ_FULLSYNC);
 	}
 
 	return (size_t)len;
 }
 
 size_t
-fileobj_getsize(fileobj_t *fobj)
+fileobj_getsize(fileref_t *fref)
 {
+	fileobj_t *fobj = fref->fobj;
+
 	app_log(LOG_DEBUG, "%s: vnode %p, size %zu", __func__, fobj, fobj->len);
+
 	if (fileobj_dataload(fobj) == -1) {
 		errno = EIO;
 		return -1;
@@ -412,8 +528,10 @@ fileobj_getsize(fileobj_t *fobj)
 }
 
 int
-fileobj_setsize(fileobj_t *fobj, size_t len)
+fileobj_setsize(fileref_t *fref, size_t len)
 {
+	fileobj_t *fobj = fref->fobj;
+
 	/*
 	 * Only load the data if truncating to non-zero.
 	 */
@@ -434,8 +552,8 @@ fileobj_setsize(fileobj_t *fobj, size_t len)
 	fobj->len = len;
 	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);
 
-	if (fileobj_sync(fobj, FOBJ_WRITEBACK) == -1) {
-		app_elog(LOG_DEBUG, "%s: fileobj_sync() failed", __func__);
+	if (fileobj_syncnode(fobj, FOBJ_WRITEBACK) == -1) {
+		app_elog(LOG_DEBUG, "%s: fileobj_syncnode() failed", __func__);
 		return -1;
 	}
 

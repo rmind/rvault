@@ -134,6 +134,7 @@ mock_get_vault(const char *cipher, char **path)
 void
 mock_cleanup_vault(rvault_t *vault, char *base_path)
 {
+	assert(vault->file_count == 0);  // should be no leaks
 	rvault_close(vault);
 	mock_cleanup_vault_dir(base_path);
 }
@@ -142,28 +143,28 @@ void
 mock_vault_fwrite(rvault_t *vault, const char *f, const char *data)
 {
 	const size_t datalen = strlen(data);
-	fileobj_t *fobj = fileobj_open(vault, f, O_CREAT | O_RDWR, FOBJ_OMASK);
-	ssize_t nbytes = fileobj_pwrite(fobj, data, datalen, 0);
+	fileref_t *fref = fileobj_open(vault, f, O_CREAT | O_RDWR, FOBJ_OMASK);
+	ssize_t nbytes = fileobj_pwrite(fref, data, datalen, 0);
 	assert(nbytes == (ssize_t)datalen);
-	fileobj_close(fobj);
+	fileobj_close(fref);
 }
 
 void
 mock_vault_fcheck(rvault_t *vault, const char *f, const char *data)
 {
 	const size_t datalen = strlen(data);
-	fileobj_t *fobj = fileobj_open(vault, f, O_RDONLY, FOBJ_OMASK);
+	fileref_t *fref = fileobj_open(vault, f, O_RDONLY, FOBJ_OMASK);
 	char buf[1024];
 	ssize_t nbytes;
 
-	assert(fobj != NULL);
+	assert(fref != NULL);
 	assert(datalen < sizeof(buf));
 
-	nbytes = fileobj_pread(fobj, buf, sizeof(buf), 0);
+	nbytes = fileobj_pread(fref, buf, sizeof(buf), 0);
 	assert(nbytes == (ssize_t)datalen);
 	buf[nbytes] = '\0';
 	assert(strcmp(data, buf) == 0);
-	fileobj_close(fobj);
+	fileobj_close(fref);
 }
 
 void *

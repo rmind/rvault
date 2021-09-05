@@ -92,7 +92,7 @@ static int
 rvaultfs_truncate(const char *path, off_t size)
 {
 	rvault_t *vault = get_vault_ctx();
-	fileobj_t *fobj;
+	fileref_t *fref;
 
 	app_log(LOG_DEBUG, "%s: path `%s', size %jd",
 	    __func__, path, (intmax_t)size);
@@ -106,15 +106,15 @@ rvaultfs_truncate(const char *path, off_t size)
 	 * to be loaded before truncation (e.g. in order decompress and
 	 * determine the correct offset).
 	 */
-	if ((fobj = fileobj_open(vault, path, O_RDWR, FOBJ_OMASK)) == NULL) {
+	if ((fref = fileobj_open(vault, path, O_RDWR, FOBJ_OMASK)) == NULL) {
 		return -errno;
 	}
-	if (fileobj_setsize(fobj, (size_t)size) == -1) {
+	if (fileobj_setsize(fref, (size_t)size) == -1) {
 		const int ret = -errno;
-		fileobj_close(fobj);
+		fileobj_close(fref);
 		return ret;
 	}
-	fileobj_close(fobj);
+	fileobj_close(fref);
 	return 0;
 }
 
@@ -122,9 +122,9 @@ static int
 rvaultfs_open_raw(const char *path, struct fuse_file_info *fi, mode_t mode)
 {
 	rvault_t *vault = get_vault_ctx();
-	fileobj_t *fobj;
+	fileref_t *fref;
 
-	if ((fobj = fileobj_open(vault, path, fi->flags, mode)) == NULL) {
+	if ((fref = fileobj_open(vault, path, fi->flags, mode)) == NULL) {
 		return -errno;
 	}
 
@@ -140,8 +140,8 @@ rvaultfs_open_raw(const char *path, struct fuse_file_info *fi, mode_t mode)
 	/* Associate the file object with the FUSE file handle. */
 	static_assert(sizeof(fi->fh) >= sizeof(uintptr_t),
 	    "fuse_file_info::fh is too small to fit a pointer value");
-	fi->fh = (uintptr_t)fobj;
-	app_log(LOG_DEBUG, "%s: `%s' -> %p", __func__, path, fobj);
+	fi->fh = (uintptr_t)fref;
+	app_log(LOG_DEBUG, "%s: `%s' -> %p", __func__, path, fref);
 	return 0;
 }
 
@@ -163,17 +163,17 @@ static int
 rvaultfs_read(const char *path __unused, char *buf, size_t len,
     off_t offset, struct fuse_file_info *fi)
 {
-	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 	ssize_t ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s', vnode %p, len %zu, offset %jd",
-	    __func__, path, fobj, len, (intmax_t)offset);
-	ASSERT(fobj != NULL);
+	app_log(LOG_DEBUG, "%s: path `%s', fref %p, len %zu, offset %jd",
+	    __func__, path, fref, len, (intmax_t)offset);
+	ASSERT(fref != NULL);
 
 	if (len == 0) {
 		return 0;
 	}
-	if ((ret = fileobj_pread(fobj, buf, len, offset)) == -1) {
+	if ((ret = fileobj_pread(fref, buf, len, offset)) == -1) {
 		return -errno;
 	}
 	return ret;
@@ -183,17 +183,17 @@ static int
 rvaultfs_write(const char *path __unused, const char *buf, size_t len,
     off_t offset, struct fuse_file_info *fi)
 {
-	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 	ssize_t ret;
 
-	app_log(LOG_DEBUG, "%s: path `%s', vnode %p, len %zu, offset %jd",
-	    __func__, path, fobj, len, (intmax_t)offset);
-	ASSERT(fobj != NULL);
+	app_log(LOG_DEBUG, "%s: path `%s', fref %p, len %zu, offset %jd",
+	    __func__, path, fref, len, (intmax_t)offset);
+	ASSERT(fref != NULL);
 
 	if (len == 0) {
 		return 0;
 	}
-	if ((ret = fileobj_pwrite(fobj, buf, len, offset)) == -1) {
+	if ((ret = fileobj_pwrite(fref, buf, len, offset)) == -1) {
 		return -errno;
 	}
 	return ret;
@@ -202,32 +202,32 @@ rvaultfs_write(const char *path __unused, const char *buf, size_t len,
 static int
 rvaultfs_flush(const char *path __unused, struct fuse_file_info *fi)
 {
-	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 
-	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
-	ASSERT(fobj != NULL);
-	return fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 ? -errno : 0;
+	app_log(LOG_DEBUG, "%s: path `%s', fref %p", __func__, path, fref);
+	ASSERT(fref != NULL);
+	return fileobj_sync(fref, FOBJ_FULLSYNC) == -1 ? -errno : 0;
 }
 
 static int
 rvaultfs_fsync(const char *path __unused, int isdatasync __unused,
     struct fuse_file_info *fi)
 {
-	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 
-	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
-	ASSERT(fobj != NULL);
-	return fileobj_sync(fobj, FOBJ_FULLSYNC) == -1 ? -errno : 0;
+	app_log(LOG_DEBUG, "%s: path `%s', fref %p", __func__, path, fref);
+	ASSERT(fref != NULL);
+	return fileobj_sync(fref, FOBJ_FULLSYNC) == -1 ? -errno : 0;
 }
 
 static int
 rvaultfs_release(const char *path __unused, struct fuse_file_info *fi)
 {
-	fileobj_t *fobj = (void *)(uintptr_t)fi->fh;
+	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 
-	app_log(LOG_DEBUG, "%s: path `%s', vnode %p", __func__, path, fobj);
-	ASSERT(fobj != NULL);
-	fileobj_close(fobj);
+	app_log(LOG_DEBUG, "%s: path `%s', fref %p", __func__, path, fref);
+	ASSERT(fref != NULL);
+	fileobj_close(fref);
 	return 0;
 }
 
