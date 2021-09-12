@@ -14,7 +14,10 @@ typedef struct fileref fileref_t;
 struct fileobj;
 typedef struct fileobj fileobj_t;
 
-enum { FOBJ_WRITEBACK, FOBJ_FULLSYNC };
+enum {
+	FOBJ_WRITEBACK,		// write dirty data to the backing store
+	FOBJ_FULLSYNC		// FOBJ_WRITEBACK + invoke full sync
+};
 
 #define	FOBJ_OMASK	0644	// default file mask
 
