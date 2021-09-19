@@ -9,6 +9,8 @@
 #define	_CLI_H_
 
 void		usage_srvurl(bool);
+bool		cli_ask_consent(void);
+
 rvault_t *	open_vault(const char *, const char *);
 int		sdb_cli(const char *, const char *, int, char **);
 

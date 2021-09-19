@@ -1,5 +1,5 @@
 .\"
-.\" Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+.\" Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
 .\" All rights reserved.
 .\"
 .\" Redistribution and use in source and binary forms, with or without
@@ -90,7 +90,8 @@ Show help of this command.
 .El
 .\" ---
 .It Ic export-key Oo Fl s Oc
-Print the metadata and the effective encryption key.
+Print the metadata and the effective encryption key, which serves as
+the recover key.
 This command can be used to backup the key and relevant metadata
 for recovery purposes.
 WARNING: Leaking this key would compromise the data, therefore expose it
@@ -117,7 +118,7 @@ Show all files and directories, including the files beginning with dot.
 Show help of this command.
 .El
 .\" ---
-.It Ic sdb
+.It Ic sdb Oo Fl r Ar path Oc
 Enter the command line interface (CLI) to operate the database of secrets
 (e.g. passwords).
 The following inner commands are available within the CLI:
@@ -134,6 +135,10 @@ Delete the secret.
 .Pp
 The given names must not have white spaces.
 The secret will be asked in a prompt.
+.Pp
+The database can be opened using the recovery key specified by the
+.Fl r
+flag with the path to the file.
 .\" ---
 .It Ic mount Oo Fl c Ar 1|0 Oc Oo Fl d Oc Oo Fl f Oc Oo Fl r Ar path Oc Oo Fl s Ar mode Oc Oo Fl h Oc Ar path
 Mount the vault as a FUSE file system at the given path.
