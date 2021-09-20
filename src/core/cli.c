@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -55,7 +55,7 @@ usage(void)
 	    "\n"
 	    "Commands:\n"
 	    "  create           Create and initialize a new vault\n"
-	    "  export-key       Print the metadata and key for backup/recovery\n"
+	    "  export-key       Print the metadata and key for recovery\n"
 	    "  ls               List the vault contents\n"
 	    "  mount            Mount the encrypted vault as a file system\n"
 	    "  sdb              CLI to operate secrets/passwords\n"
@@ -78,6 +78,21 @@ usage_datapath(void)
 	    "\n"
 	);
 	exit(EXIT_FAILURE);
+}
+
+bool
+cli_ask_consent(void)
+{
+	int ch;
+
+	for (;;) {
+		puts("Type 'y' to continue or 'n' to exit:");
+		ch = getchar();
+		if (ch == 'y')
+			return true;
+		if (ch == 'n')
+			return false;
+	}
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -260,7 +275,7 @@ usage:
 	    "  -c|--compress 1|0  Enable or disable (default) compression.\n"
 	    "  -d|--debug         Enable FUSE-level debug logging.\n"
 	    "  -f|--foreground    Run in the foreground (do not daemonize).\n"
-	    "  -r|--recover PATH  Mount the vault using the recovery file.\n"
+	    "  -r|--recover PATH  Mount the vault using the recovery key.\n"
 	    "  -s|--sync MODE     Sync mode on write operations: "
 	    "weak (faster) or full (safer).\n"
 	    "\n"
@@ -299,17 +314,12 @@ export_key(const char *datapath, const char *server, int argc, char **argv)
 
 	if (!silent) {
 		printf("WARNING: This command is about to expose the "
-		    "effective encryption key!\n"
+		    "effective encryption (recovery) key!\n"
 		    "Back it up safely for recovery; "
 		    "leaking it would compromise the data.\n\n");
 
-		for (;;) {
-			puts("Type 'y' to continue or 'n' to exit:");
-			ch = getchar();
-			if (ch == 'y')
-				break;
-			if (ch == 'n')
-				return 0;
+		if (!cli_ask_consent()) {
+			return 0;
 		}
 	}
 
@@ -321,7 +331,7 @@ usage:
 	fprintf(stderr,
 	    "Usage:\t" APP_NAME " export-key [ -s ]\n"
 	    "\n"
-	    "Print the metadata and the effective encryption key."
+	    "Print the metadata and the effective encryption (recovery) key."
 	    "\n"
 	    "Options:\n"
 	    "  -s|--silent        Silent mode with consent.\n"

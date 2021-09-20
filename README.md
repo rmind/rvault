@@ -94,9 +94,9 @@ An attacker may retrieve the envelope-encrypted key, but it would still not
 be possible to decrypt the data without obtaining your data and passphrase.
 
 The attacker, however, could destroy the keys stored on the server-side.
-Hence it is recommended to make a backup of the effective encryption key
-for recovery and store it safely, e.g. print it on paper and lock it in a
-physical safe.
+Hence it is recommended to make a backup of the recovery key (which is the
+effective encryption key) for recovery and store it safely, e.g. print it
+on paper and lock it in a physical safe.
 
 #### What if I lost my authentication device?
 
@@ -106,7 +106,7 @@ using other reliable means (e.g. physical identification).
 #### What if I would forget my passphrase?
 
 It would be practically impossible to decrypt the data.  However, if you made
-a backup of the effective encryption key, then you can recover your data.
+a backup of the recovery key, then you can recover your data.
 
 ## Caveats
 

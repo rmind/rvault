@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <signal.h>
 
 #include <editline/readline.h>
@@ -37,10 +38,11 @@ sdb_sql_print(void *arg, const char *val)
 	fprintf(fp, "%s\n", val);
 }
 
-#define	SDB_NEED_SYNC		0x1	// change made; need to sync DB
-#define	SDB_ASK_SECRET		0x2	// ask to input the secret
-#define	SDB_CHECK_RESULT	0x4	// check that rows were updated
-#define	SDB_TIERS_GC		0x8	// clean up the tiers
+#define	SDB_NEED_SYNC		0x01	// change made; need to sync DB
+#define	SDB_ASK_SECRET		0x02	// ask to input the secret
+#define	SDB_CHECK_RESULT	0x04	// check that rows were updated
+#define	SDB_TIERS_GC		0x08	// clean up the tiers
+#define	SDB_ASK_CONSENT		0x10	// ask for user consent
 
 static const struct sdb_cmd {
 	const char *	cmd;
@@ -65,7 +67,7 @@ static const struct sdb_cmd {
 		NULL
 	},
 	{
-		"DEL", 1, SDB_NEED_SYNC,
+		"DEL", 1, SDB_NEED_SYNC | SDB_ASK_CONSENT,
 		"DELETE FROM secrets WHERE key = ?",
 		NULL,
 	},
@@ -112,6 +114,10 @@ sdb_exec_cmd(sdb_t *sdb, const struct sdb_cmd *cmdcfg,
 {
 	const unsigned flags = cmdcfg->flags;
 	int ret;
+
+	if ((flags & SDB_ASK_CONSENT) != 0 && !cli_ask_consent()) {
+		return;
+	}
 
 	ret = sdb_query(sdb, sdb_cmd_handle, __UNCONST(cmdcfg),
 	    cmdcfg->query, n, params);
@@ -272,14 +278,39 @@ sdb_cli_timeout(int sig __unused)
 int
 sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 {
+	static const char *opts_s = "r:h?";
+	static struct option opts_l[] = {
+		{ "recover",	required_argument,	0,	'r'	},
+		{ "help",	no_argument,		0,	'h'	},
+		{ NULL,		0,			NULL,	0	}
+	};
+	const char *recover = NULL;
 	rvault_t *vault;
 	sdb_t *sdb;
 	char *v, *line;
-	int ret;
+	int ch, ret;
 
-	vault = open_vault(datapath, server);
-	ASSERT(vault != NULL);
+	while ((ch = getopt_long(argc, argv, opts_s, opts_l, NULL)) != -1) {
+		switch (ch) {
+		case 'r':
+			recover = optarg;
+			break;
+		case 'h':
+		case '?':
+		default:
+			goto usage;
+		}
+	}
+	argc -= optind;
+	argv += optind;
 
+	vault = recover ?
+	    rvault_open_ekey(datapath, recover) :
+	    open_vault(datapath, server);
+	if (!vault) {
+		fprintf(stderr, "failed to open the vault -- exiting.\n");
+		exit(EXIT_FAILURE);
+	}
 	if ((sdb = sdb_open(vault)) == NULL) {
 		app_elog(LOG_CRIT, APP_NAME": could not open the database");
 		rvault_close(vault);
@@ -310,7 +341,15 @@ sdb_cli(const char *datapath, const char *server, int argc, char **argv)
 	}
 	sdb_close(sdb);
 	rvault_close(vault);
-
-	(void)argc; (void)argv;
+	return 0;
+usage:
+	fprintf(stderr,
+	    "Usage:\t" APP_NAME " sdb [ -r file ]\n"
+	    "\n"
+	    "CLI to operate secrets/passwords.\n"
+	    "\n"
+	    "Options:\n"
+	    "  -r|--recover PATH  Open SDB using the recovery key.\n"
+	);
 	return -1;
 }
