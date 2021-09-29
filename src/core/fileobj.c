@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -80,13 +80,35 @@ static void	fileobj_free(fileobj_t *);
 
 static fileobj_t *
 fileobj_alloc(rvault_t *vault, char *vpath, const size_t pathlen,
-    const int flags, const mode_t mode)
+    int flags, const mode_t mode)
 {
 	fileobj_t *fobj;
 
 	if ((fobj = calloc(1, sizeof(fileobj_t))) == NULL) {
 		return NULL;
 	}
+
+	/*
+	 * This file descriptor is used to manage the underlying file in
+	 * the backing store.  It is shared across all file references
+	 * i.e descriptors issued to the users.  We therefore have to allow
+	 * both read and write operations as well as force the R/W mode
+	 * for the owner.
+	 *
+	 * Such setting breaks the file permission, but it is deemed to
+	 * be acceptable.  The correct state could be emulated by storing
+	 * the permissions in the file metadata, but it is unlikely to
+	 * serve any practical purpose.
+	 */
+	flags = O_RDWR | (flags & (O_CREAT | O_TRUNC));
+	fobj->fd = open(vpath, flags, mode | (S_IWUSR | S_IRUSR));
+	if (fobj->fd == -1) {
+		app_elog(LOG_DEBUG, "%s: open() failed (flags %u, mode %u)",
+		    __func__, flags, mode);
+		free(fobj);
+		return NULL;
+	}
+
 	fobj->vault = vault;
 	fobj->vpath = vpath;
 	fobj->pathlen = pathlen;
@@ -97,14 +119,6 @@ fileobj_alloc(rvault_t *vault, char *vpath, const size_t pathlen,
 		fobj->flags |= FOBJ_ALWAYS_FSYNC;
 	}
 
-	/*
-	 * Open the data file.
-	 */
-	fobj->fd = open(fobj->vpath, flags, mode);
-	if (fobj->fd == -1) {
-		fileobj_free(fobj);
-		return NULL;
-	}
 	app_log(LOG_DEBUG, "%s: vnode %p, data length %zu, vpath [%s]",
 	    __func__, fobj, fobj->len, fobj->vpath);
 	return fobj;
@@ -131,7 +145,7 @@ fileobj_open(rvault_t *vault, const char *path, int flags, mode_t mode)
 		return NULL;
 	}
 	if ((fobj = rhashmap_get(vault->file_map, vpath, pathlen)) != NULL) {
-		/* Already in the map -- just get the file referenve. */
+		/* Already in the map -- just get the file reference. */
 		free(vpath);
 		goto retfd;
 	}
@@ -390,10 +404,15 @@ fileobj_close(fileref_t *fref)
 	LIST_REMOVE(fref, entry);
 	free(fref);
 
-	/*
-	 * Destroy the file object on last reference.
-	 */
-	if (--fobj->refcnt == 0) {
+	if (--fobj->refcnt) {
+		/*
+		 * It is a good idea to sync the data on close.
+		 */
+		(void)fileobj_syncnode(fobj, FOBJ_WRITEBACK);
+	} else {
+		/*
+		 * Destroy the file object on last reference.
+		 */
 		fileobj_free(fobj);
 	}
 }
