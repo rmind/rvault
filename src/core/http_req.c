@@ -52,7 +52,7 @@ http_request(const char *url, http_req_t *req)
 	if ((curl = curl_easy_init()) == NULL) {
 		return -1;
 	}
-	curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTPS);
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, CURLPROTO_HTTPS);
 	if ((res = curl_easy_setopt(curl, CURLOPT_URL, url)) != CURLE_OK) {
 		app_log(LOG_ERR, "http without TLS is not allowed");
 		goto out;
