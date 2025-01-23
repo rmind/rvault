@@ -510,22 +510,6 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg, bool debug)
 	if (debug) {
 		fuse_opt_add_arg(&args, "-odebug");
 	}
-#if defined(__NetBSD__)
-	fuse = fuse_new(&args, &rvaultfs_ops, sizeof(rvaultfs_ops), vault);
-	if (fuse == NULL) {
-		return -1;
-	}
-	if (fuse_mount(fuse, mountpoint) == -1) {
-		fuse_destroy(fuse);
-		return -1;
-	}
-	if (!fg) {
-		(void)fuse_daemonize(fuse);
-	}
-	ret = fuse_loop(fuse);
-	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
-	fuse_unmount(fuse);
-#else
 	struct fuse_chan *chan;
 
 	if ((chan = fuse_mount(mountpoint, &args)) == NULL) {
@@ -540,7 +524,6 @@ rvaultfs_run(rvault_t *vault, const char *mountpoint, bool fg, bool debug)
 	ret = fuse_loop(fuse);
 	app_log(LOG_DEBUG, "%s: exited fuse_loop() with %d", __func__, ret);
 	fuse_unmount(mountpoint, chan);
-#endif
 	fuse_destroy(fuse);
 	fuse_opt_free_args(&args);
 	return ret;
