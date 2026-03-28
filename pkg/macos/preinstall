@@ -1,5 +1,7 @@
 #!/bin/sh
 
+# check: installer -pkg rvault-0.$ver.pkg -target / -verbose -dumplog
+
 set -eu
 
 log_file="$HOME/Library/Logs/rvault-installer.log"
@@ -20,7 +22,7 @@ error_dep_msg()
 	local msg=$(cat <<-EOF
 	The following dependencies are needed by rvault:
 
-	$1 FUSE for macOS: https://osxfuse.github.io
+	$1 FUSE for macOS: https://macfuse.github.io/
 
 	$2 Homebrew package manager: https://brew.sh/
 
@@ -28,11 +30,11 @@ error_dep_msg()
 
 	Additionally, the following Homebrew packages are required:
 
-	$3 OpenSSL 1.1: brew install openssl
-
+	$3 OpenSSL: brew install openssl
 	$4 libscrypt: brew install libscrypt
 
 	Run the commands above to install them.
+	$5
 	EOF
 	)
 	error_msg "$msg"
@@ -41,13 +43,18 @@ error_dep_msg()
 # ✓ ✘ •
 failed=""
 d1="✓"; d2="✓"; d3="✓"; d4="✓";
+check=""
 
-test -f "/usr/local/lib/libosxfuse.2.dylib" || { failed=1; d1="✘"; }
-test -f "/usr/local/bin/brew" || { d2="✘"; }
-test -d "/usr/local/opt/openssl@1.1/" || { failed=1; d3="✘"; }
-test -f "/usr/local/opt/libscrypt/lib/libscrypt.0.dylib" || { failed=1; d4="✘"; }
+test -f "/usr/local/lib/libfuse.dylib" || { failed=1; d1="✘"; }
+test -f "/opt/homebrew/bin/brew" || { failed=1; d2="✘"; }
+test -f "/opt/homebrew/opt/openssl/lib/libssl.dylib" || { failed=1; d3="✘"; }
+test -f "/opt/homebrew/opt/libscrypt/lib/libscrypt.dylib" || { failed=1; d4="✘"; }
+$INSTALLER_PAYLOAD_DIR/usr/local/bin/rvault --version >/dev/null 2>&1 || {
+	failed=1;
+	check="$($INSTALLER_PAYLOAD_DIR/usr/local/bin/rvault --version 2>&1)";
+}
 
 [ -z "$failed" ] || {
-	error_dep_msg "$d1" "$d2" "$d3" "$d4";
+	error_dep_msg "$d1" "$d2" "$d3" "$d4" "$check";
 	exit 1;
 }

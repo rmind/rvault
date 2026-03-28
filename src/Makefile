@@ -108,8 +108,10 @@ endif
 ifeq ($(SYSNAME),Darwin)
 # XXX
 CFLAGS+=	-I/usr/local/include
-CFLAGS+=	-I/usr/local/opt/openssl@1.1/include
-LDFLAGS+=	-L/usr/local/opt/openssl@1.1/lib
+CFLAGS+=	-I $(shell brew --prefix openssl)/include
+LDFLAGS+=	-L $(shell brew --prefix openssl)/lib
+CFLAGS+=	-I $(shell brew --prefix libscrypt)/include
+LDFLAGS+=	-L $(shell brew --prefix libscrypt)/lib
 endif
 
 ifeq ($(SYSNAME),NetBSD)

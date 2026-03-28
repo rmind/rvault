@@ -20,6 +20,7 @@
 #include <string.h>
 #include <errno.h>
 
+#define	OPENSSL_SUPPRESS_DEPRECATED
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 

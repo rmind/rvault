@@ -5,7 +5,7 @@ all:
 	@ echo "targets"
 	@ echo "	make rpm"
 	@ echo "	make deb"
-	@ echo "	make osx-pkg"
+	@ echo "	make macos-pkg"
 
 prepare:
 	@ awk '/APP_PROJ_VER/ { print $$3 }' \
@@ -23,7 +23,7 @@ deb: prepare
 	dpkg-buildpackage -rfakeroot -us -uc -b
 	@ echo && printf "\x1B[32mDEB packages:\033[0m\n" && ls -1 ../*.deb
 
-osx-pkg: prepare
+macos-pkg: prepare
 	cp -R ../src/ ./SOURCES
 	cd ./SOURCES && make -j8 && \
 	    make install DESTDIR="$(PWD)/BUILDROOT" \
@@ -46,4 +46,4 @@ win-pkg:
 clean:
 	rm -rf BUILD BUILDROOT RPMS SOURCES SRPMS version.txt *.pkg
 
-.PHONY: all rpm deb osx-pkg clean
+.PHONY: all rpm deb macos-pkg clean

@@ -138,5 +138,5 @@ To build from source:
 To build the packages:
 * RPM (tested on RHEL/CentOS 8): `cd pkg && make rpm`
 * DEB (tested on Debian 11): `cd pkg && make deb`
-* MacOS pkg (tested on Catalina): `cd pkg && make osx-pkg`
+* MacOS >= 10.15 pkg: `cd pkg && make macos-pkg`
 * Experimental build on Windows/Cygwin: `cd pkg && make win-pkg`
