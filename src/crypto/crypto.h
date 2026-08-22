@@ -42,10 +42,12 @@ typedef enum {
 typedef struct crypto crypto_t;
 
 /*
- * Randomness and zeroing suitable for cryptographic purposes.
+ * Randomness, zeroing and similar suitable for cryptographic purposes.
  */
 ssize_t		crypto_getrandbytes(void *, size_t);
 void		crypto_memzero(void *, size_t);
+ssize_t		crypto_memcmp(const crypto_t *,
+		    const void *, const void *, size_t);
 
 /*
  * Key derivation function (KDF) API.

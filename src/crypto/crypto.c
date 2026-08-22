@@ -497,7 +497,7 @@ crypto_decrypt(crypto_t *crypto, const void *inbuf, size_t inlen,
 		    crypto->aad, crypto->aad_len, hmac_buf) != tag_len) {
 			goto out;
 		}
-		if (memcmp(crypto->tag, hmac_buf, tag_len) != 0) {
+		if (crypto_memcmp(crypto, crypto->tag, hmac_buf, tag_len)) {
 			goto out;
 		}
 	}
@@ -540,6 +540,12 @@ crypto_hmac_len(const crypto_hmac_t hmac_id)
 	}
 	errno = EINVAL;
 	return -1;
+}
+
+ssize_t
+crypto_memcmp(const crypto_t *crypto, const void *p1, const void *p2, size_t n)
+{
+	return crypto->ops->memcmp(crypto, p1, p2, n);
 }
 
 void

@@ -187,6 +187,12 @@ out:
 	return ret;
 }
 
+static ssize_t
+mbedtls_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+{
+	return mbedtls_ct_memcmp(p1, p2, n);
+}
+
 static void __constructor(102)
 mbedtls_crypto_register(void)
 {
@@ -196,6 +202,7 @@ mbedtls_crypto_register(void)
 		.encrypt	= mbedtls_crypto_encrypt,
 		.decrypt	= mbedtls_crypto_decrypt,
 		.hmac		= mbedtls_crypto_hmac,
+		.memcmp		= mbedtls_crypto_memcmp,
 	};
 	crypto_engine_register("mbedtls", &mbedtls_ops);
 }

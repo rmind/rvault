@@ -240,6 +240,12 @@ out:
 	return nbytes;
 }
 
+static ssize_t
+openssl_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+{
+	return CRYPTO_memcmp(p1, p2, n);
+}
+
 static void __constructor(101)
 openssl_crypto_register(void)
 {
@@ -249,6 +255,7 @@ openssl_crypto_register(void)
 		.encrypt	= openssl_crypto_encrypt,
 		.decrypt	= openssl_crypto_decrypt,
 		.hmac		= openssl_crypto_hmac,
+		.memcmp		= openssl_crypto_memcmp,
 	};
 	crypto_engine_register("openssl", &openssl_ops);
 }

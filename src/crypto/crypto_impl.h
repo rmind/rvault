@@ -26,6 +26,8 @@ typedef struct crypto_ops {
 	ssize_t		(*hmac)(const crypto_t *, const void *, size_t,
 			    const void *, size_t,
 			    unsigned char [static HMAC_MAX_BUFLEN]);
+	ssize_t		(*memcmp)(const crypto_t *, const void *,
+			    const void *, size_t);
 } crypto_ops_t;
 
 struct crypto {

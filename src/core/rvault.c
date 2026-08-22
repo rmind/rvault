@@ -215,7 +215,7 @@ rvault_hmac_verify(crypto_t *crypto, const rvault_hdr_t *hdr)
 	if (rvault_hmac_compute(crypto, hdr, hmac_comp) != hmac_len) {
 		return -1;
 	}
-	return memcmp(hmac_rec, hmac_comp, hmac_len) ? -1 : 0;
+	return crypto_memcmp(crypto, hmac_rec, hmac_comp, hmac_len) ? -1 : 0;
 }
 
 /*

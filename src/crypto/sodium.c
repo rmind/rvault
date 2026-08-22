@@ -141,6 +141,12 @@ sodium_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 	return -1;
 }
 
+static ssize_t
+sodium_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+{
+	return sodium_memcmp(p1, p2, n);
+}
+
 static void __constructor(102)
 sodium_crypto_register(void)
 {
@@ -150,6 +156,7 @@ sodium_crypto_register(void)
 		.encrypt	= sodium_crypto_encrypt,
 		.decrypt	= sodium_crypto_decrypt,
 		.hmac		= sodium_crypto_hmac,
+		.memcmp		= sodium_crypto_memcmp,
 	};
 	crypto_engine_register("sodium", &sodium_ops);
 }
