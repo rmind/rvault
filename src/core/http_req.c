@@ -58,6 +58,7 @@ http_request(const char *url, http_req_t *req)
 		goto out;
 	}
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 2L);
 
 	switch (req->type) {
 	case HTTP_GET:
