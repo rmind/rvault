@@ -103,7 +103,7 @@ rvault_push_key(rvault_t *vault)
 	crypto_t *crypto = vault->crypto;
 	void *rkey = NULL, *akey = NULL, *ekey = NULL;
 	char *ekey_hex = NULL, *tag_hex, *s;
-	size_t klen, aklen, rlen, blen, tlen;
+	size_t key_len, auth_key_len, key_buf_len, ekey_buf_len, tlen;
 	ssize_t nbytes, ret = -1;
 	const void *tag = NULL;
 	http_req_t req;
@@ -113,14 +113,14 @@ rvault_push_key(rvault_t *vault)
 	/*
 	 * Prepare the buffers.
 	 */
-	klen = crypto_get_keylen(crypto);
-	aklen = crypto_get_authkeylen(crypto);
-	rlen = klen + aklen;
-	if ((rkey = malloc(rlen)) == NULL) {
+	key_len = crypto_get_keylen(crypto);
+	auth_key_len = crypto_get_authkeylen(crypto);
+	key_buf_len = key_len + auth_key_len;
+	if ((rkey = malloc(key_buf_len)) == NULL) {
 		goto out;
 	}
-	blen = crypto_get_buflen(crypto, rlen);
-	if ((ekey = malloc(blen)) == NULL) {
+	ekey_buf_len = crypto_get_buflen(crypto, key_buf_len);
+	if ((ekey = malloc(ekey_buf_len)) == NULL) {
 		goto out;
 	}
 
@@ -132,12 +132,13 @@ rvault_push_key(rvault_t *vault)
 	 * Note: the memory block contains both the encryption and
 	 * authentication keys (they will also be separated on pull).
 	 */
-	if (crypto_getrandbytes(rkey, rlen) == -1) {
+	if (crypto_getrandbytes(rkey, key_buf_len) == -1) {
 		goto out;
 	}
-	akey = (uint8_t *)rkey + klen;
+	akey = (uint8_t *)rkey + key_len;
 
-	if ((nbytes = crypto_encrypt(crypto, rkey, rlen, ekey, blen)) == -1) {
+	if ((nbytes = crypto_encrypt(crypto, rkey, key_buf_len,
+	    ekey, ekey_buf_len)) == -1) {
 		goto out;
 	}
 	if ((ekey_hex = hex_write_str(ekey, nbytes)) == NULL) {
@@ -166,11 +167,11 @@ rvault_push_key(rvault_t *vault)
 	/*
 	 * Re-set the active keys.
 	 */
-	if (crypto_set_key(crypto, rkey, klen) == -1) {
+	if (crypto_set_key(crypto, rkey, key_len) == -1) {
 		app_log(LOG_DEBUG, "%s: crypto_set_key() failed", __func__);
 		goto out;
 	}
-	if (crypto_set_authkey(crypto, akey, aklen) == -1) {
+	if (crypto_set_authkey(crypto, akey, auth_key_len) == -1) {
 		app_log(LOG_DEBUG, "%s: crypto_set_authkey() failed", __func__);
 		goto out;
 	}
@@ -184,11 +185,11 @@ out:
 		free(ekey_hex);
 	}
 	if (ekey) {
-		crypto_memzero(ekey, blen);
+		crypto_memzero(ekey, ekey_buf_len);
 		free(ekey);
 	}
 	if (rkey) {
-		crypto_memzero(rkey, rlen);
+		crypto_memzero(rkey, key_buf_len);
 		free(rkey);
 	}
 	http_req_free(&req);
