@@ -1,0 +1,97 @@
+name: Build
+on: [push]
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build_and_tests:
+    name: Build and run the tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        cc: [gcc, clang]
+        include:
+          - os: ubuntu-latest
+            target: Linux
+          - os: macos-latest
+            target: MacOS
+      fail-fast: false
+
+    steps:
+      - name: Load dependencies from cache
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        id: apt-deps
+        uses: actions/cache@v3
+        with:
+          path: ubuntu-apt-cache
+          key: deps-1
+
+      - name: Install dependencies (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' && steps.apt-deps.outputs.cache-hit != 'true' }}
+        run: |
+          uname -a && cat /etc/os-release
+          sudo apt-get update
+          sudo apt-get install -y build-essential fakeroot debhelper gcc-14
+          # crypto libraries:
+          sudo apt-get install -y libssl-dev libsodium-dev libmbedtls-dev
+          # mandatory dependencies:
+          sudo apt-get install -y libscrypt-dev libfuse-dev libcurl4-openssl-dev
+          # optional dependencies:
+          sudo apt-get install -y libedit-dev liblz4-dev libsqlite3-dev liblua5.3-dev lua5.3
+
+      - name: Update gcc (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.cc == 'gcc' }}
+        run: |
+          sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-14 10
+          sudo update-alternatives --set cc /usr/bin/gcc
+
+      - name: Install dependencies (MacOS)
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          uname -a
+          brew install libscrypt lz4 openssl libsodium mbedtls lua
+          brew install --cask macfuse
+
+      - name: Check out the repo
+        uses: actions/checkout@v3
+
+      - name: Checkout Git submodules
+        run: git submodule update --init --recursive
+
+      #
+      # Tests with two crypto libraries.
+      #
+
+      - name: Compile and run the tests (OpenSSL)
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          cc --version
+          (cd src && make clean && USE_LZ4=1 make -j4 tests)
+
+      - name: Compile and run the tests (libsodium)
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          (cd src && USE_SODIUM=1 make clean && USE_OPENSSL=0 USE_SODIUM=1 make tests)
+
+      #
+      # There are fine to run as Linux and, let's say, GCC-only.
+      #
+
+      - name: Compile crypto library and run Lua tests
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.cc == 'gcc' }}
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          (cd src && make clean && make -j4 lib && make lua-tests)
+
+      - name: Build DEB package
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.cc == 'gcc' }}
+        env:
+          CC: ${{ matrix.cc }}
+        run: |
+          cd pkg && make deb && sudo dpkg -i ../rvault*.deb

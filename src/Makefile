@@ -130,6 +130,7 @@ endif
 
 ifeq ($(USE_LZ4),1)
 CFLAGS+=	-DUSE_LZ4
+CFLAGS+=	$(shell pkg-config --cflags liblz4)
 LDFLAGS+=	$(shell pkg-config --libs liblz4)
 endif
 
