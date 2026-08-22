@@ -188,7 +188,7 @@ out:
 		free(ekey);
 	}
 	if (rkey) {
-		crypto_memzero(rkey, klen);
+		crypto_memzero(rkey, rlen);
 		free(rkey);
 	}
 	http_req_free(&req);
