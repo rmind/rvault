@@ -86,7 +86,7 @@ openssl_crypto_create(crypto_t *crypto)
  */
 static ssize_t
 openssl_crypto_encrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	const EVP_CIPHER *cipher = crypto->ctx;
 	EVP_CIPHER_CTX *ctx;
@@ -144,7 +144,7 @@ err:
  */
 static ssize_t
 openssl_crypto_decrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	const EVP_CIPHER *cipher = crypto->ctx;
 	EVP_CIPHER_CTX *ctx;
@@ -241,7 +241,7 @@ out:
 }
 
 static ssize_t
-openssl_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+openssl_crypto_memcmp(const crypto_t *, const void *p1, const void *p2, size_t n)
 {
 	return CRYPTO_memcmp(p1, p2, n);
 }

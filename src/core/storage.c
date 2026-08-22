@@ -353,7 +353,7 @@ out:
 }
 
 ssize_t
-storage_read_length(rvault_t *vault __unused, int fd)
+storage_read_length(rvault_t *, int fd)
 {
 	unsigned char buf[FILEOBJ_HDR_LEN];
 	fileobj_hdr_t *hdr = (void *)buf;

@@ -8,7 +8,7 @@ keys, certificates) and small documents.  It uses _envelope encryption_
 with one-time password (OTP) authentication.  The vault can be operated
 as a file system in userspace.
 
-It is written in C11 and distributed under the 2-clause BSD license.
+It is written in C23 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
 
 ## Features

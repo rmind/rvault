@@ -234,7 +234,7 @@ keyname_generator(const char *text, const int state)
 }
 
 static char **
-cmd_completion(const char *text, const int start, const int end __unused)
+cmd_completion(const char *text, const int start, const int)
 {
 	/* Note: disable default of path completion. */
 	rl_attempted_completion_over = 1;
@@ -268,7 +268,7 @@ sdb_usage(void)
 
 
 static void
-sdb_cli_timeout(int sig __unused)
+sdb_cli_timeout(int)
 {
 	const char msg[] = "\n"APP_NAME": user inactivity timeout; exiting.\n";
 	write(STDOUT_FILENO, msg, sizeof(msg));

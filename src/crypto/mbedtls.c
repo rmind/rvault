@@ -82,7 +82,7 @@ mbedtls_crypto_destroy(crypto_t *crypto)
  */
 static ssize_t
 mbedtls_crypto_encrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	mbedtls_cipher_context_t *ctx = crypto->ctx;
 	size_t nbytes;
@@ -118,7 +118,7 @@ mbedtls_crypto_encrypt(const crypto_t *crypto,
  */
 static ssize_t
 mbedtls_crypto_decrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	mbedtls_cipher_context_t *ctx = crypto->ctx;
 	size_t nbytes;
@@ -188,7 +188,7 @@ out:
 }
 
 static ssize_t
-mbedtls_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+mbedtls_crypto_memcmp(const crypto_t *, const void *p1, const void *p2, size_t n)
 {
 	return mbedtls_ct_memcmp(p1, p2, n);
 }

@@ -60,7 +60,7 @@ get_vault_path(const char *path, char *buf, size_t len)
 }
 
 static void *
-rvaultfs_init(struct fuse_conn_info *conn __unused)
+rvaultfs_init(struct fuse_conn_info *)
 {
 	/* Must return the context. */
 	return get_vault_ctx();
@@ -210,8 +210,7 @@ rvaultfs_flush(const char *path __unused, struct fuse_file_info *fi)
 }
 
 static int
-rvaultfs_fsync(const char *path __unused, int isdatasync __unused,
-    struct fuse_file_info *fi)
+rvaultfs_fsync(const char *path __unused, int, struct fuse_file_info *fi)
 {
 	fileref_t *fref = (void *)(uintptr_t)fi->fh;
 
@@ -294,7 +293,7 @@ struct rvaultfs_readdir_iter_ctx {
 };
 
 static void
-rvaultfs_readdir_iter(void *arg0, const char *name, struct dirent *dp __unused)
+rvaultfs_readdir_iter(void *arg0, const char *name, struct dirent *)
 {
 	struct rvaultfs_readdir_iter_ctx *arg = arg0;
 	arg->filler(arg->buf, name, NULL, 0);
@@ -302,7 +301,7 @@ rvaultfs_readdir_iter(void *arg0, const char *name, struct dirent *dp __unused)
 
 static int
 rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
-    off_t offset __unused, struct fuse_file_info *fi __unused)
+    off_t, struct fuse_file_info *)
 {
 	struct rvaultfs_readdir_iter_ctx arg = { .filler = filler, .buf = buf };
 	rvault_t *vault = get_vault_ctx();
@@ -392,7 +391,7 @@ rvaultfs_getxattr(const char *path, const char *name, char *value,
 
 static int
 rvaultfs_setxattr(const char *path, const char *name, const char *val,
-    size_t size, int ops __unused, uint32_t pos)
+    size_t size, int, uint32_t pos)
 {
 	char vpath[PATH_MAX];
 	int ret;

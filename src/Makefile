@@ -23,7 +23,7 @@ USE_OPENSSL?=	1
 #
 # Common C compiler flags.
 #
-CFLAGS+=	-std=gnu11 -O2 -g -Wall -Wextra -Werror
+CFLAGS+=	-std=gnu23 -O2 -g -Wall -Wextra -Werror
 CFLAGS+=	-I core/ -I fuse/ -I sys/ -I crypto/ -I lua/ -I misc/
 
 #

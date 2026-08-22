@@ -60,7 +60,7 @@ sodium_crypto_create(crypto_t *crypto)
  */
 static ssize_t
 sodium_crypto_encrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	int ret;
 
@@ -87,7 +87,7 @@ sodium_crypto_encrypt(const crypto_t *crypto,
  */
 static ssize_t
 sodium_crypto_decrypt(const crypto_t *crypto,
-    const void *inbuf, size_t inlen, void *outbuf, size_t outlen __unused)
+    const void *inbuf, size_t inlen, void *outbuf, size_t)
 {
 	int ret;
 
@@ -142,7 +142,7 @@ sodium_crypto_hmac(const crypto_t *crypto, const void *data, size_t dlen,
 }
 
 static ssize_t
-sodium_crypto_memcmp(const crypto_t *crypto __unused, const void *p1, const void *p2, size_t n)
+sodium_crypto_memcmp(const crypto_t *, const void *p1, const void *p2, size_t n)
 {
 	return sodium_memcmp(p1, p2, n);
 }
