@@ -1,7 +1,6 @@
 <p align="center"><a href="https://github.com/rmind/rvault"><img src="./misc/rvault-light-t.png" width="100px" border="0" alt="rvault" /></a></p>
 
-[![Build Status](https://travis-ci.com/rmind/rvault.svg?branch=master)](https://travis-ci.com/rmind/rvault)
-[![Release](https://img.shields.io/github/release/rmind/rvault.svg)](https://github.com/rmind/rvault/releases)
+![BUILD](https://github.com/rmind/rvault/actions/workflows/build.yaml/badge.svg)
 
 **rvault** is a secure and authenticated store for secrets (passwords,
 keys, certificates) and small documents.  It uses _envelope encryption_
