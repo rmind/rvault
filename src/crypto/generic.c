@@ -23,6 +23,12 @@
 #include "crypto.h"
 #include "sys.h"
 
+#if defined(__GLIBC__) && defined(__GLIBC_PREREQ)
+#if __GLIBC_PREREQ(2, 43)
+#define	HAVE_MEMSET_EXPLICIT	1
+#endif
+#endif
+
 /*
  * crypto_getrandbytes: get random bytes for cryptographic purposes.
  *
@@ -61,15 +67,19 @@ crypto_getrandbytes(void *buf, size_t len)
  * crypto_memzero: explicit (secure) zeroing.
  */
 
-static volatile unsigned char crypto_memzero_xor;
-
 void
 crypto_memzero(void *buf, size_t len)
 {
+#if defined(HAVE_MEMSET_EXPLICIT)
+	memset_explicit(buf, 0, len);
+#else
+	static volatile unsigned char crypto_memzero_xor;
 	volatile unsigned char *bufp = (volatile void *)buf;
 
 	for (size_t i = 0; i < len; i++) {
 		crypto_memzero_xor ^= bufp[i];
 		bufp[i] = 0;
 	}
+	__asm volatile ("" ::: "memory");
+#endif
 }
