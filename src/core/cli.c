@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -9,7 +9,7 @@
  * Command line interface (CLI).
  *
  * - Application entry point, command dispatching and help messages.
- * - FUSE mounting and SDB have their own handling.
+ * - FUSE mounting has its own handling.
  */
 
 #include <sys/stat.h>
@@ -58,7 +58,6 @@ usage(void)
 	    "  export-key       Print the metadata and key for recovery\n"
 	    "  ls               List the vault contents\n"
 	    "  mount            Mount the encrypted vault as a file system\n"
-	    "  sdb              CLI to operate secrets/passwords\n"
 	    "  read             Read a file from the vault\n"
 	    "  write            Write a file to the vault\n"
 	    "\n"
@@ -508,20 +507,6 @@ file_write_cmd(const char *datapath, const char *server, int argc, char **argv)
 
 //////////////////////////////////////////////////////////////////////////////
 
-#ifndef SQLITE3_SERIALIZE
-static int
-sdb_sqlite3_mismatch(const char *d, const char *server, int argc, char **argv)
-{
-	(void)d; (void)server; (void)argc; (void)argv;
-	fprintf(stderr,
-	    APP_NAME ": this command is not supported; "
-	    "you need sqlite 3.23 or newer,\n"
-	    "compiled with the SQLITE_ENABLE_DESERIALIZE option.\n"
-	);
-	return -1;
-}
-#endif
-
 typedef int (*cmd_func_t)(const char *, const char *, int, char **);
 
 static int
@@ -535,11 +520,6 @@ process_command(const char *datapath, const char *server, int argc, char **argv)
 		{ "create",	create_vault,		false	},
 		{ "export-key",	export_key,		false	},
 		{ "ls",		file_list_cmd,		false	},
-#ifdef SQLITE3_SERIALIZE
-		{ "sdb",	sdb_cli,		false	},
-#else
-		{ "sdb",	sdb_sqlite3_mismatch,	false	},
-#endif
 		{ "mount",	mount_vault,		true	},
 		{ "read",	file_read_cmd,		false	},
 		{ "write",	file_write_cmd,		true	},

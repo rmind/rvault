@@ -17,7 +17,6 @@
 
 #define	RVAULT_ABI_VER		3
 #define	RVAULT_META_FILE	"rvault.metadata"
-#define	RVAULT_SDB_FILE		"rvault.sdb"
 
 #define	RVAULT_FOBJ_PREF	"RV:"
 #define	RVAULT_FOBJ_PREFLEN	(sizeof(RVAULT_FOBJ_PREF) - 1)

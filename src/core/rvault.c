@@ -6,7 +6,7 @@
  */
 
 /*
- * rvault: a secure and authenticated store for secrets and small documents.
+ * rvault: a secure and authenticated store for small documents.
  * It uses _envelope encryption_ and OTP or other authentication mechanism
  * together with server.
  *

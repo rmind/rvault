@@ -48,7 +48,6 @@ CFLAGS+=	-D_POSIX_C_SOURCE=200809L -D_GNU_SOURCE -D_DEFAULT_SOURCE
 endif
 ifeq ($(SYSNAME),Darwin)
 CFLAGS+=	-D__DARWIN_C_LEVEL=__DARWIN_C_FULL
-USE_SQLITE?=	yes
 endif
 ifeq ($(SYSNAME),NetBSD)
 CFLAGS+=	-D_NETBSD_SOURCE -D_KERNTYPES
@@ -66,9 +65,6 @@ endif
 CFLAGS+=	-flto
 LDFLAGS+=	-flto
 endif
-ifeq ($(CC),clang)
-# TODO: LTO
-endif
 
 #
 # Standard vs debug build flags.
@@ -81,24 +77,6 @@ LDFLAGS+=	-fsanitize=address -fsanitize=undefined
 endif
 else
 CFLAGS+=	-DNDEBUG
-endif
-
-#
-# Sqlite3 needs to be compiled with SQLITE_ENABLE_DESERIALIZE.
-#
-
-USE_SQLITE?=	try
-
-ifeq ($(USE_SQLITE),try)
-SQLITE3_SERIALIZE:=	$(shell echo '\
-    \#include <stdio.h>\n\
-    \#include <sqlite3.h>\n\
-    int main() { sqlite3_serialize(NULL, "", NULL, 0); return 0; }' | \
-    $(CC) $(CFLAGS) -Wno-error -o /dev/null -xc -lsqlite3 - \
-    >/dev/null 2>/dev/null && echo 1 || echo 0)
-USE_SQLITE=	$(SQLITE3_SERIALIZE)
-else ifeq ($(USE_SQLITE),yes)
-USE_SQLITE=	1
 endif
 
 #
@@ -149,11 +127,6 @@ endif
 
 LDFLAGS+=	-lcurl
 
-ifeq ($(USE_SQLITE),1)
-CFLAGS+=	-DSQLITE3_SERIALIZE
-LDFLAGS+=	-lsqlite3 -ledit
-endif
-
 #
 # source
 #
@@ -166,10 +139,6 @@ OBJS+=		core/storage.o
 OBJS+=		core/fileobj.o
 OBJS+=		core/http_req.o
 OBJS+=		core/recovery.o
-ifeq ($(USE_SQLITE),1)
-OBJS+=		core/sdb.o
-OBJS+=		core/sdb_sql.o
-endif
 OBJS+=		fuse/rvaultfs.o
 OBJS+=		sys/fs.o
 OBJS+=		sys/mmap.o
@@ -213,8 +182,7 @@ CFLAGS+=	-I libs/rhashmap/src/
 # object files for the tests
 #
 TEST_OBJS:=	$(shell echo $(OBJS) |			\
-		    sed 's:core/cli.o::' |		\
-		    sed 's:core/sdb.o::'		\
+		    sed 's:core/cli.o::'		\
 		)
 TEST_OBJS+=	tests/mock.o
 TESTS:=		$(patsubst tests/%.c,%,$(wildcard tests/t_*.c))
