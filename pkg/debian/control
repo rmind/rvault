@@ -7,9 +7,7 @@ Build-Depends:
  libssl-dev,
  libscrypt-dev,
  libfuse-dev,
- libcurl4-dev,
- libedit-dev,
- libsqlite3-dev
+ libcurl4-dev
 Standards-Version: 3.9.1
 Homepage: https://github.com/rmind/rvault
 License: BSD-2-clause
@@ -18,11 +16,10 @@ Package: rvault
 Section: misc
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}
-Description: Secure and authenticated store for secrets and small documents
-  rvault is a secure and authenticated store for secrets (passwords,
-  keys, certificates) and small documents.  It uses _envelope encryption_
-  with one-time password (OTP) authentication.  It is written in C11 and
-  distributed under the 2-clause BSD license.
+Description: Secure and authenticated store for small documents
+  rvault is a secure and authenticated store for small documents.
+  It uses _envelope encryption_ with one-time password (OTP) authentication.
+  It is written in modern C and distributed under the 2-clause BSD license.
 
 Package: rvault-dbg
 Section: debug

@@ -2,10 +2,9 @@
 
 ![BUILD](https://github.com/rmind/rvault/actions/workflows/build.yaml/badge.svg)
 
-**rvault** is a secure and authenticated store for secrets (passwords,
-keys, certificates) and small documents.  It uses _envelope encryption_
-with one-time password (OTP) authentication.  The vault can be operated
-as a file system in userspace.
+**rvault** is a secure and authenticated store for small documents.
+It uses _envelope encryption_ with one-time password (OTP) authentication.
+The vault can be operated as a file system in userspace.
 
 It is written in C23 and distributed under the 2-clause BSD license.
 Available on: Linux and MacOS.
@@ -16,7 +15,6 @@ Key features and cryptography:
 - Envelope encryption with one-time password (OTP) authentication.
 - Mounting vault as a file system in userspace using
 [FUSE](https://en.wikipedia.org/wiki/Filesystem_in_Userspace).
-- Command line interface (CLI) to operate secrets (and auto-complete for keys).
 - [scrypt](https://en.wikipedia.org/wiki/Scrypt)
 [RFC 7914](https://tools.ietf.org/html/rfc7914)
 for the key derivation function
@@ -124,8 +122,6 @@ Mandatory:
 - libcurl
 
 Optional:
-- libedit
-- sqlite3 3.23 or newer with `SQLITE_ENABLE_DESERIALIZE` enabled
 - lz4
 
 ## Building
@@ -138,4 +134,3 @@ To build the packages:
 * RPM (tested on RHEL/CentOS 8): `cd pkg && make rpm`
 * DEB (tested on Debian 11): `cd pkg && make deb`
 * MacOS >= 10.15 pkg: `cd pkg && make macos-pkg`
-* Experimental build on Windows/Cygwin: `cd pkg && make win-pkg`

@@ -40,7 +40,7 @@ jobs:
           # mandatory dependencies:
           sudo apt-get install -y libscrypt-dev libfuse-dev libcurl4-openssl-dev
           # optional dependencies:
-          sudo apt-get install -y libedit-dev liblz4-dev libsqlite3-dev liblua5.3-dev lua5.3
+          sudo apt-get install -y liblz4-dev liblua5.3-dev lua5.3
 
       - name: Update gcc (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.cc == 'gcc' }}

@@ -1,5 +1,5 @@
 PROJ=		rvault
-RPM_WITH?=	# "--with sqlite"
+RPM_WITH?=
 
 all:
 	@ echo "targets"

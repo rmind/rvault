@@ -179,12 +179,3 @@ hex_readmem_arbitrary(const char *s, size_t len, size_t *outlen)
 	}
 	return buf;
 }
-
-#if defined(SQLITE3_SERIALIZE)
-int
-sdb_cli(const char *datapath, const char *server, int argc, char **argv)
-{
-	(void)datapath; (void)server; (void)argc; (void)argv;
-	return 0;
-}
-#endif
