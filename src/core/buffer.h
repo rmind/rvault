@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -20,6 +20,7 @@ typedef struct {
 #define	SBUF_GROWEXP	0x01	// grow exponentially
 
 void *	sbuffer_alloc(sbuffer_t *, size_t);
+size_t	sbuffer_get_size(const sbuffer_t *);
 void *	sbuffer_move(sbuffer_t *, size_t, unsigned);
 void	sbuffer_replace(sbuffer_t *, sbuffer_t *);
 void	sbuffer_free(sbuffer_t *);
