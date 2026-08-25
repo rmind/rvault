@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -383,7 +383,7 @@ fileobj_free(fileobj_t *fobj)
 	}
 	if (fobj->len) {
 		ASSERT(fobj->sbuf.buf != NULL);
-		ASSERT(fobj->sbuf.buf_size >= fobj->len);
+		ASSERT(sbuffer_get_size(&fobj->sbuf) >= fobj->len);
 		sbuffer_free(&fobj->sbuf);
 	}
 	if (fobj->fd > 0) {
@@ -492,7 +492,7 @@ fileobj_pwrite(fileref_t *fref, const void *buf, size_t len, off_t offset)
 		 * then merely bump the data length.  Otherwise, grow
 		 * exponentially.
 		 */
-		if (endoff >= fobj->sbuf.buf_size &&
+		if (endoff >= sbuffer_get_size(&fobj->sbuf) &&
 		    sbuffer_move(&fobj->sbuf, nlen, SBUF_GROWEXP) == NULL) {
 			errno = ENOMEM;
 			return -1;
@@ -567,6 +567,17 @@ fileobj_setsize(fileref_t *fref, size_t len)
 	if (sbuffer_move(&fobj->sbuf, len, 0) == NULL && len) {
 		app_elog(LOG_DEBUG, "%s: sbuffer_move() failed", __func__);
 		return -1;
+	}
+
+	/*
+	 * truncate(2) semantics: the extended part must be filled with zeros.
+	 */
+	if (len > fobj->len) {
+		const uint64_t off = fobj->len;
+		const size_t ext_len = len - fobj->len;
+		uint8_t *fbuf = fobj->sbuf.buf;
+
+		memset(&fbuf[off], 0, ext_len);
 	}
 	fobj->len = len;
 	fobj->flags |= (FOBJ_DIRTY | FOBJ_NEED_FSYNC);

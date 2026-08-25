@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <unistd.h>
 #include <errno.h>
 
 #if defined(USE_LZ4)
@@ -29,7 +30,7 @@
 #include "utils.h"
 
 /*
- * "Secure" buffer API.
+ * "Secure" buffer API.  Operates in page sizes.
  */
 
 void *
@@ -42,48 +43,77 @@ sbuffer_alloc(sbuffer_t *sbuf, size_t len)
 		return NULL;
 	}
 	sbuf->buf = buf;
-	sbuf->buf_size = len;
+	sbuf->buf_size = roundup2(len, sysconf(_SC_PAGESIZE));
 	return buf;
 }
 
+size_t
+sbuffer_get_size(const sbuffer_t *sbuf)
+{
+	ASSERT(sbuf->buf || sbuf->buf_size == 0);
+	return sbuf->buf_size;
+}
+
+/*
+ * sbuffer_move: "move" the buffer to a new size, if necessary, copying
+ * over the contents to a new buffer (memory mapping).
+ *
+ * If SBUF_GROWEXP is set, then grow by page sizes exponentially.
+ */
 void *
 sbuffer_move(sbuffer_t *sbuf, size_t newlen, unsigned flags)
 {
+	const size_t page_size = sysconf(_SC_PAGESIZE);
+	size_t buf_nsize = roundup2(newlen, page_size);
 	void *nbuf = NULL;
 
-	if (sbuf->buf_size == newlen) {
+	/*
+	 * If the new length is zero, then release the buffer.
+	 * If the same number of pages, then nothing to do.
+	 */
+	if (buf_nsize == 0) {
+		sbuffer_free(sbuf);
+		return NULL;
+	}
+	if (sbuf->buf_size == buf_nsize) {
 		return sbuf->buf;
 	}
-	if (newlen) {
-		/*
-		 * Grow exponentially.  Check for overflow, though.
-		 */
-		if ((flags & SBUF_GROWEXP) != 0 && newlen > sbuf->buf_size) {
-			if ((newlen << 1) > newlen) {
-				newlen <<= 1;
-			}
-		}
-		if ((nbuf = safe_mmap(newlen, -1, MMAP_WRITEABLE)) == NULL) {
-			return NULL;
-		}
+
+	// Shrink only if the new size is less than 50%.
+	if ((sbuf->buf_size / buf_nsize) >= 2) {
+		return sbuf->buf;
+	}
+
+	// Grow exponentially; check for overflow, though.
+	if (buf_nsize > sbuf->buf_size && (flags & SBUF_GROWEXP) != 0) {
+		buf_nsize = MAX(buf_nsize * 2, buf_nsize);
+	}
+
+	app_log(LOG_DEBUG, "%s: resizing sbuffer %p from [%zu] to [%zu]",
+	    __func__, sbuf, sbuf->buf_size, buf_nsize);
+
+	if ((nbuf = safe_mmap(buf_nsize, -1, MMAP_WRITEABLE)) == NULL) {
+		return NULL;
 	}
 	if (sbuf->buf) {
 		ASSERT(sbuf->buf_size > 0);
-		if (nbuf) {
-			ASSERT(newlen > 0);
-			memcpy(nbuf, sbuf->buf, MIN(sbuf->buf_size, newlen));
-		} else {
-			ASSERT(newlen == 0);
-		}
+		memcpy(nbuf, sbuf->buf, MIN(sbuf->buf_size, newlen));
 		safe_munmap(sbuf->buf, sbuf->buf_size, MMAP_ERASE);
 	} else {
 		ASSERT(sbuf->buf_size == 0);
 	}
 	sbuf->buf = nbuf;
-	sbuf->buf_size = newlen;
+	sbuf->buf_size = buf_nsize;
 	return nbuf;
 }
 
+/*
+ * sbuffer_replace: "replace" the destination buffer with the buffer from
+ * the source.  The source buffer gets inherited, therefore it must not be
+ * released sbuffer_free() again.
+ *
+ * This is to accommodate temporary buffers.
+ */
 void
 sbuffer_replace(sbuffer_t *src, sbuffer_t *dst)
 {
