@@ -405,7 +405,7 @@ out:
 typedef enum { FILE_SHOWALL = 0x1 } flist_flag_t;
 
 static void
-file_list_iter(void *arg, const char *name, struct dirent *dp)
+file_list_iter(void *arg, const char *name, struct dirent *, const struct stat *)
 {
 	const flist_flag_t flags = (flist_flag_t)(uintptr_t)arg;
 
@@ -413,7 +413,6 @@ file_list_iter(void *arg, const char *name, struct dirent *dp)
 		return; // skip the hidden files if "-a"
 	}
 	printf("%s\n", name);
-	(void)arg; (void)dp;
 }
 
 static int
