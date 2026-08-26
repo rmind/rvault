@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -287,23 +287,24 @@ rvaultfs_rmdir(const char *path)
 	return (ret == -1) ? -errno : ret;
 }
 
-struct rvaultfs_readdir_iter_ctx {
+typedef struct {
 	fuse_fill_dir_t	filler;
 	void *		buf;
-};
+} rv_readdir_iter_ctx_t;
 
 static void
-rvaultfs_readdir_iter(void *arg0, const char *name, struct dirent *)
+rvaultfs_readdir_iter(void *arg0, const char *name,
+    struct dirent *, const struct stat *st)
 {
-	struct rvaultfs_readdir_iter_ctx *arg = arg0;
-	arg->filler(arg->buf, name, NULL, 0);
+	rv_readdir_iter_ctx_t *arg = arg0;
+	arg->filler(arg->buf, name, st, 0);
 }
 
 static int
 rvaultfs_readdir(const char *path, void *buf, fuse_fill_dir_t filler,
     off_t, struct fuse_file_info *)
 {
-	struct rvaultfs_readdir_iter_ctx arg = { .filler = filler, .buf = buf };
+	rv_readdir_iter_ctx_t arg = { .filler = filler, .buf = buf };
 	rvault_t *vault = get_vault_ctx();
 
 	app_log(LOG_DEBUG, "%s: path `%s'", __func__, path);

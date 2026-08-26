@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -638,6 +638,20 @@ rvault_close(rvault_t *vault)
 	free(vault);
 }
 
+static void
+fill_dirent_stat(rvault_t *vault, const char *dir_path,
+    const char *name, struct stat *st)
+{
+	char *entry_path = NULL;
+
+	if (asprintf(&entry_path, "%s/%s", dir_path, name) == -1 ||
+	    fileobj_stat(vault, entry_path, st) == -1) {
+		app_elog(LOG_ERR, "%s: stat on %s/%s failed",
+		    __func__, dir_path, name);
+	}
+	free(entry_path);
+}
+
 /*
  * rvault_iter_dir: iterate the directory in the vault.
  */
@@ -661,11 +675,13 @@ rvault_iter_dir(rvault_t *vault, const char *path,
 
 	while ((dp = readdir(dirp)) != NULL) {
 		const char *vname = dp->d_name;
+		struct stat st;
 		char *name;
 
 		/* "." and ".." are somewhat special cases. */
 		if (strcmp(vname, ".") == 0 || strcmp(vname, "..") == 0) {
-			iterfunc(arg, vname, dp);
+			fill_dirent_stat(vault, path, vname, &st);
+			iterfunc(arg, vname, dp, &st);
 			continue;
 		}
 
@@ -684,7 +700,8 @@ rvault_iter_dir(rvault_t *vault, const char *path,
 			closedir(dirp);
 			return -1;
 		}
-		iterfunc(arg, name, dp);
+		fill_dirent_stat(vault, path, name, &st);
+		iterfunc(arg, name, dp, &st);
 		free(name);
 	}
 	closedir(dirp);

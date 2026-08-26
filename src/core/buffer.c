@@ -149,17 +149,15 @@ lz4_decompress_buf(const void *inbuf, const size_t inlen, sbuffer_t *sbuf)
 #else
 
 ssize_t
-lz4_compress_buf(const void *inbuf, const size_t inlen, sbuffer_t *sbuf)
+lz4_compress_buf(const void *, const size_t, sbuffer_t *)
 {
-	(void)inbuf; (void)inlen; (void)sbuf;
 	errno = ENOTSUP;
 	return -1;
 }
 
 ssize_t
-lz4_decompress_buf(const void *inbuf, const size_t inlen, sbuffer_t *sbuf)
+lz4_decompress_buf(const void *, const size_t, sbuffer_t *)
 {
-	(void)inbuf; (void)inlen; (void)sbuf;
 	errno = ENOTSUP;
 	return -1;
 }

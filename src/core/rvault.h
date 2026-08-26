@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020 Mindaugas Rasiukevicius <rmind at noxt eu>
+ * Copyright (c) 2019-2026 Mindaugas Rasiukevicius <rmind at noxt eu>
  * All rights reserved.
  *
  * Use is subject to license terms, as specified in the LICENSE file.
@@ -49,8 +49,10 @@ int		rvault_pull_key(rvault_t *);
 int		rvault_unhex_aedata(const char *, void **, size_t *,
 		    void **, size_t *);
 
+struct stat;
 struct dirent;
-typedef void (*dir_iter_t)(void *, const char *, struct dirent *);
+typedef void (*dir_iter_t)(void *, const char *,
+    struct dirent *, const struct stat *);
 
 int		rvault_iter_dir(rvault_t *, const char *, void *, dir_iter_t);
 char *		rvault_resolve_path(rvault_t *, const char *, size_t *);
